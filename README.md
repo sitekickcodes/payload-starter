@@ -9,7 +9,7 @@ The foundation for every Sitekick project. A pre-configured Next.js starter with
 - **Neon Postgres** — Serverless database via `@payloadcms/db-vercel-postgres`
 - **Vercel Blob** — File/image storage via `@payloadcms/storage-vercel-blob`
 - **Tailwind CSS v4** — Utility-first styling with CSS variables
-- **shadcn/ui** — Component library using **Base UI** (not Radix)
+- **shadcn/ui** — Component library using **Base UI**
 - **Bun** — Package manager and runtime
 - **Deployed on Vercel**
 
