@@ -43,9 +43,17 @@
 - Use Tailwind utility classes for styling
 - Use the pre-built typography classes from globals.css: `.h1`-`.h6`, `.body-lg`, `.body-md`, `.body-sm`, `.text-lead`, `.text-button`, `.text-eyebrow`, `.text-caption`, `.text-overline`, `.text-quote`
 - All font sizes must be 12px (0.75rem) minimum for accessibility
-- `font-display` is Instrument Serif (headings, quotes)
-- `font-sans` is Geist Sans (body, UI)
-- `font-mono` is Geist Mono (code)
+- Three font families are registered as CSS variables: `--font-display` (headings, quotes), `--font-sans` (body, UI), `--font-mono` (code) — see `globals.css` and `layout.tsx` for the actual typefaces
+
+## Figma MCP / Design Implementation
+
+- When translating Figma designs, always check for an existing component or utility class before creating anything new
+- Map Figma text styles to the typography classes in globals.css first (`.h1`-`.h6`, `.body-*`, `.text-*`)
+- Map Figma colors, spacing, and other tokens to existing Tailwind theme values before adding custom ones
+- If a design element matches a common UI pattern (accordion, dialog, tabs, tooltip, etc.), check if a shadcn/ui component already exists in `src/components/ui/`
+- If no local component exists but shadcn has one, install it first (`bunx shadcn@latest add <component>`), then customize — do not build from scratch
+- If no shadcn component fits, ask before creating a new component
+- Keep customizations in the component file itself; avoid one-off global styles
 
 ## Payload CMS
 
