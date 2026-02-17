@@ -1,36 +1,111 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Sitekick Starter
+
+The foundation for every Sitekick project. A pre-configured Next.js starter with our typography system, component library, and tooling baked in so the team can skip setup and start building.
+
+## Stack
+
+- **Next.js 16** — App Router, React Server Components, TypeScript
+- **Tailwind CSS v4** — Utility-first styling with CSS variables
+- **shadcn/ui** — Component library using **Base UI** (not Radix)
+- **Bun** — Package manager and runtime
+
+## Fonts
+
+| Token | Font | Usage |
+|-------|------|-------|
+| `font-sans` | Geist Sans | Body text, UI elements |
+| `font-mono` | Geist Mono | Code, technical content |
+| `font-display` | Instrument Serif | Headings, quotes, display text |
+
+## Typography Classes
+
+Pre-built utility classes in `globals.css` that set font-family, size, line-height, weight, and tracking in one class. All sizes are 12px minimum for accessibility.
+
+### Headings (Instrument Serif)
+
+| Class | Size |
+|-------|------|
+| `.h1` | 4rem (64px) |
+| `.h2` | 3rem (48px) |
+| `.h3` | 2.25rem (36px) |
+| `.h4` | 1.75rem (28px) |
+| `.h5` | 1.375rem (22px) |
+| `.h6` | 1.125rem (18px) |
+
+### Body (Geist Sans)
+
+| Class | Size |
+|-------|------|
+| `.body-lg` | 1.125rem (18px) |
+| `.body-md` | 1rem (16px) |
+| `.body-sm` | 0.875rem (14px) |
+
+### UI Text
+
+| Class | Size | Notes |
+|-------|------|-------|
+| `.text-lead` | 1.25rem (20px) | Intro paragraphs, hero subtext |
+| `.text-button` | 0.875rem (14px) | Medium weight, slight tracking |
+| `.text-eyebrow` | 0.75rem (12px) | Uppercase, wide tracking |
+| `.text-caption` | 0.75rem (12px) | Metadata, timestamps |
+| `.text-overline` | 0.75rem (12px) | Uppercase, widest tracking |
+| `.text-quote` | 1.25rem (20px) | Instrument Serif italic |
+
+### Usage
+
+```tsx
+<p className="text-eyebrow">Case Study</p>
+<h2 className="h2">Building the Future of Web</h2>
+<p className="text-lead">A deep dive into modern web architecture.</p>
+<p className="body-md">The rest of the content goes here...</p>
+```
 
 ## Getting Started
 
-First, run the development server:
-
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
+# Clone the repo
+git clone https://github.com/sitekickcodes/sitekick-starter.git
+cd sitekick-starter
+
+# Install dependencies
+bun install
+
+# Start dev server
 bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000) to see the result.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Adding Components
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+shadcn/ui is configured with Base UI. Add components with:
 
-## Learn More
+```bash
+bunx shadcn@latest add button dialog dropdown-menu
+```
 
-To learn more about Next.js, take a look at the following resources:
+Components are installed to `src/components/ui/` and automatically use Base UI primitives.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Project Structure
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+```
+src/
+  app/
+    globals.css       # Theme, colors, typography classes
+    layout.tsx        # Root layout, font loading
+    page.tsx          # Home page
+  components/
+    ui/               # shadcn/ui components (add as needed)
+  lib/
+    utils.ts          # cn() class merge utility
+  hooks/              # Custom hooks
+```
 
-## Deploy on Vercel
+## Scripts
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+| Command | Description |
+|---------|-------------|
+| `bun dev` | Start dev server |
+| `bun run build` | Production build |
+| `bun start` | Start production server |
+| `bun run lint` | Run ESLint |
