@@ -1,1 +1,1 @@
-RULES.md
+CLAUDE.md
