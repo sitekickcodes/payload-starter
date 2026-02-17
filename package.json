@@ -3,19 +3,31 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start",
-    "lint": "eslint"
+    "dev": "cross-env NODE_OPTIONS=--no-deprecation next dev",
+    "build": "cross-env NODE_OPTIONS=--no-deprecation next build",
+    "start": "cross-env NODE_OPTIONS=--no-deprecation next start",
+    "lint": "eslint",
+    "payload": "cross-env NODE_OPTIONS=--no-deprecation payload",
+    "generate:types": "cross-env NODE_OPTIONS=--no-deprecation payload generate:types",
+    "generate:importmap": "cross-env NODE_OPTIONS=--no-deprecation payload generate:importmap",
+    "ci": "payload migrate && bun run build"
   },
   "dependencies": {
     "@base-ui/react": "^1.2.0",
+    "@payloadcms/db-vercel-postgres": "^3.76.1",
+    "@payloadcms/next": "^3.76.1",
+    "@payloadcms/richtext-lexical": "^3.76.1",
+    "@payloadcms/storage-vercel-blob": "^3.76.1",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "cross-env": "^10.1.0",
+    "graphql": "^16.12.0",
     "lucide-react": "^0.574.0",
     "next": "16.1.6",
+    "payload": "^3.76.1",
     "react": "19.2.3",
     "react-dom": "19.2.3",
+    "sharp": "^0.34.5",
     "tailwind-merge": "^3.4.1"
   },
   "devDependencies": {
@@ -35,6 +47,7 @@
     "unrs-resolver"
   ],
   "trustedDependencies": [
+    "esbuild",
     "sharp",
     "unrs-resolver"
   ]
