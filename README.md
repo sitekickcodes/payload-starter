@@ -23,13 +23,14 @@ cd sitekick-starter
 # Install dependencies
 bun install
 
-# Set up environment variables
-cp .env.example .env.local
-# Fill in PAYLOAD_SECRET, POSTGRES_URL, BLOB_READ_WRITE_TOKEN
+# Pull environment variables from 1Password
+bun run env:pull
 
 # Start dev server
 bun dev
 ```
+
+> **No 1Password?** You can manually copy the template instead: `cp .env.example .env.local` and fill in the values by hand.
 
 Open [http://localhost:3000](http://localhost:3000) for the site, and [http://localhost:3000/admin](http://localhost:3000/admin) for the Payload admin panel.
 

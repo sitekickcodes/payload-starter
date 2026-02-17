@@ -10,7 +10,8 @@
     "payload": "cross-env NODE_OPTIONS=--no-deprecation payload",
     "generate:types": "cross-env NODE_OPTIONS=--no-deprecation payload generate:types",
     "generate:importmap": "cross-env NODE_OPTIONS=--no-deprecation payload generate:importmap",
-    "ci": "payload migrate && bun run build"
+    "ci": "payload migrate && bun run build",
+    "env:pull": "op inject -i .env.example -o .env.local"
   },
   "dependencies": {
     "@base-ui/react": "^1.2.0",
