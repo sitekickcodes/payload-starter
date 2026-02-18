@@ -42,5 +42,4 @@ yarn-error.log*
 next-env.d.ts
 
 # Payload CMS
-src/app/(payload)/admin/importMap.js
 /media
