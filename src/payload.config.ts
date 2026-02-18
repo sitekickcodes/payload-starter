@@ -31,6 +31,12 @@ export default buildConfig({
     avatar: {
       Component: "@/components/payload/AdminAvatar.tsx",
     },
+    meta: {
+      titleSuffix: "— Admin",
+    },
+    components: {
+      providers: ["@/components/payload/AdminTitleProvider.tsx"],
+    },
   },
   collections: [Blog, Pages, Media, Redirects, FormSubmissions, Users],
   onInit: async (payload) => {

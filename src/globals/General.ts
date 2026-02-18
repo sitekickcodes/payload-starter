@@ -44,6 +44,15 @@ export const General: GlobalConfig = {
       label: "Contact Info",
       fields: [
         {
+          name: "businessName",
+          label: "Business Name",
+          type: "text",
+          admin: {
+            description:
+              "Legal or display name of the business. Used in the admin panel title.",
+          },
+        },
+        {
           name: "email",
           type: "email",
           admin: {
