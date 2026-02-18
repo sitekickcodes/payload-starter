@@ -1,5 +1,5 @@
 import type { CollectionConfig } from "payload";
-import { getSiteRoutes } from "../lib/getSiteRoutes";
+import { getSiteRoutes } from "../lib/getSiteRoutes.ts";
 
 const siteRoutes = getSiteRoutes();
 
