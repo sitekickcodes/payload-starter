@@ -47,11 +47,15 @@ export default buildConfig({
       connectionString: process.env.POSTGRES_URL || "",
     },
   }),
-  email: resendAdapter({
-    defaultFromAddress: "hello@mail.sitekick.co",
-    defaultFromName: "Sitekick",
-    apiKey: process.env.RESEND_API_KEY || "",
-  }),
+  ...(process.env.RESEND_API_KEY
+    ? {
+        email: resendAdapter({
+          defaultFromAddress: "hello@mail.sitekick.co",
+          defaultFromName: "Sitekick",
+          apiKey: process.env.RESEND_API_KEY,
+        }),
+      }
+    : {}),
   sharp,
   plugins: [
     vercelBlobStorage({
