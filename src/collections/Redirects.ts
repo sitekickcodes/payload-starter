@@ -6,7 +6,7 @@ const siteRoutes = getSiteRoutes();
 export const Redirects: CollectionConfig = {
   slug: "redirects",
   admin: {
-    group: "Admin",
+    group: "Site Settings",
     useAsTitle: "from",
     defaultColumns: ["from", "to", "type", "updatedAt"],
     description:

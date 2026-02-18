@@ -32,7 +32,7 @@ export default buildConfig({
       Component: "@/components/payload/AdminAvatar.tsx",
     },
   },
-  collections: [Blog, Pages, Media, FormSubmissions, Redirects, Users],
+  collections: [Blog, Pages, Media, Redirects, FormSubmissions, Users],
   onInit: async (payload) => {
     await syncPages(payload);
   },
