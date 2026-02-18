@@ -1,5 +1,5 @@
 import type { Payload } from "payload";
-import { getSiteRoutes } from "./getSiteRoutes";
+import { getSiteRoutes } from "./getSiteRoutes.ts";
 
 /**
  * Syncs the Pages collection with the filesystem routes.
