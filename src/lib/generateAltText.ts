@@ -1,10 +1,9 @@
-import OpenAI from "openai";
-
 export async function generateAltText(
   imageSource: string | { base64: string; mimeType: string }
 ): Promise<string | null> {
   if (!process.env.OPENAI_API_KEY) return null;
 
+  const { default: OpenAI } = await import("openai");
   const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
   const imageUrl =
