@@ -41,9 +41,11 @@
 ## Styling
 
 - Use Tailwind utility classes for styling
+- Always use Tailwind's default scale for spacing, sizing, max-width, breakpoints, and all other measurements — do not use arbitrary values (`w-[347px]`) when a Tailwind token exists
 - Use the pre-built typography classes from globals.css: `.h1`-`.h6`, `.body-lg`, `.body-md`, `.body-sm`, `.text-lead`, `.text-button`, `.text-eyebrow`, `.text-caption`, `.text-overline`, `.text-quote`
 - All font sizes must be 12px (0.75rem) minimum for accessibility
 - Three font families are registered as CSS variables: `--font-display` (headings, quotes), `--font-sans` (body, UI), `--font-mono` (code) — see `globals.css` and `layout.tsx` for the actual typefaces
+- Breakpoints follow Tailwind defaults: `sm` (640px), `md` (768px), `lg` (1024px), `xl` (1280px), `2xl` (1536px) — design mobile-first
 
 ## Figma MCP / Design Implementation
 
