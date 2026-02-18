@@ -17,7 +17,8 @@ export async function syncPages(payload: Payload) {
     select: { path: true },
   });
 
-  const existingPaths = new Set(existing.map((doc) => doc.path));
+  const pages = existing as Array<{ id: string; path: string }>;
+  const existingPaths = new Set(pages.map((doc) => doc.path));
   const currentPaths = new Set(routes);
 
   // Create pages for new routes
@@ -32,7 +33,7 @@ export async function syncPages(payload: Payload) {
   }
 
   // Remove pages for deleted routes
-  const toDelete = existing.filter((doc) => !currentPaths.has(doc.path));
+  const toDelete = pages.filter((doc) => !currentPaths.has(doc.path));
   for (const doc of toDelete) {
     await payload.delete({
       collection: "pages",
