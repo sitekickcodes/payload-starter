@@ -1,5 +1,5 @@
 import type { CollectionConfig } from "payload";
-import { generateAltText } from "@/lib/generateAltText";
+import { generateAltText } from "../lib/generateAltText";
 import fs from "fs/promises";
 import path from "path";
 
