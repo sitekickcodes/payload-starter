@@ -3,56 +3,55 @@ import type { CollectionConfig } from "payload";
 export const Pages: CollectionConfig = {
   slug: "pages",
   admin: {
-    useAsTitle: "title",
-    defaultColumns: ["title", "slug", "status", "updatedAt"],
+    group: "Content",
+    useAsTitle: "path",
+    defaultColumns: ["path", "metaTitle", "updatedAt"],
+    description:
+      "SEO metadata for each page on the site. Pages are auto-discovered from the codebase.",
   },
-  versions: {
-    drafts: {
-      autosave: true,
-    },
+  access: {
+    read: () => true,
+    create: () => false,
+    delete: () => false,
   },
   fields: [
     {
-      name: "title",
-      type: "text",
-      required: true,
-    },
-    {
-      name: "slug",
+      name: "path",
       type: "text",
       required: true,
       unique: true,
+      index: true,
       admin: {
-        position: "sidebar",
+        readOnly: true,
+        description: "The URL path of this page. Auto-detected from the codebase.",
       },
     },
     {
-      name: "content",
-      type: "richText",
+      name: "metaTitle",
+      label: "Meta Title",
+      type: "text",
+      admin: {
+        description:
+          "Page title shown in browser tabs and search results. Keep under 60 characters.",
+      },
     },
     {
-      name: "meta",
-      type: "group",
-      fields: [
-        {
-          name: "title",
-          type: "text",
-          admin: {
-            description: "Defaults to page title if left empty",
-          },
-        },
-        {
-          name: "description",
-          type: "textarea",
-        },
-        {
-          name: "image",
-          type: "upload",
-          relationTo: "media",
-        },
-      ],
+      name: "metaDescription",
+      label: "Meta Description",
+      type: "textarea",
       admin: {
-        position: "sidebar",
+        description:
+          "Description shown in search results. Keep between 120–160 characters.",
+      },
+    },
+    {
+      name: "ogImage",
+      label: "OG Image",
+      type: "upload",
+      relationTo: "media",
+      admin: {
+        description:
+          "Social sharing image for this page. Falls back to the default in Site Settings.",
       },
     },
   ],
