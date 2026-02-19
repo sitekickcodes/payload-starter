@@ -1,0 +1,890 @@
+#!/usr/bin/env node
+
+import * as p from "@clack/prompts";
+import pc from "picocolors";
+import crypto from "crypto";
+import { execSync } from "child_process";
+import fs from "fs";
+import path from "path";
+
+// ─── Constants ───────────────────────────────────────────────────────────────
+
+const PAYLOAD_ONLY = [
+  "src/collections",
+  "src/globals",
+  "src/components/payload",
+  "src/app/(payload)",
+  "src/app/api/site-routes",
+  "src/lib/syncPages.ts",
+  "src/lib/getSiteRoutes.ts",
+  "src/lib/generateAltText.ts",
+  "src/lib/cms/payload.ts",
+  "src/payload.config.ts",
+  "src/payload-types.ts",
+  "src/app/(payload)/admin/importMap.js",
+];
+
+const SANITY_ONLY = [
+  "src/sanity",
+  "src/app/studio",
+  "src/lib/cms/sanity.ts",
+];
+
+const PAYLOAD_DEPS = [
+  "payload",
+  "@payloadcms/db-vercel-postgres",
+  "@payloadcms/email-resend",
+  "@payloadcms/next",
+  "@payloadcms/plugin-import-export",
+  "@payloadcms/richtext-lexical",
+  "@payloadcms/storage-vercel-blob",
+  "@payloadcms/ui",
+];
+
+const SANITY_DEPS = [
+  "sanity",
+  "next-sanity",
+  "@sanity/image-url",
+  "@sanity/vision",
+];
+
+// ─── Utility helpers ─────────────────────────────────────────────────────────
+
+/** Run a command and return trimmed stdout. Returns null on failure. */
+function run(cmd: string, opts?: { cwd?: string }): string | null {
+  try {
+    return execSync(cmd, { stdio: "pipe", cwd: opts?.cwd }).toString().trim();
+  } catch {
+    return null;
+  }
+}
+
+/** Run a command with full stdio passthrough (for interactive auth flows). */
+function runInteractive(cmd: string, opts?: { cwd?: string }) {
+  execSync(cmd, { stdio: "inherit", cwd: opts?.cwd });
+}
+
+/** Check if a CLI tool is available on PATH. */
+function isInstalled(cmd: string): boolean {
+  return run(`which ${cmd}`) !== null;
+}
+
+/** Prompt to cancel or continue when something is missing. */
+async function cancelOrContinue(message: string): Promise<boolean> {
+  const result = await p.confirm({ message, initialValue: true });
+  if (p.isCancel(result)) {
+    p.cancel("Cancelled.");
+    process.exit(0);
+  }
+  return result as boolean;
+}
+
+// ─── Tool management ─────────────────────────────────────────────────────────
+
+interface ToolDef {
+  name: string;
+  cmd: string;
+  installCmd?: string;
+  installHint?: string;
+}
+
+const TOOLS: Record<string, ToolDef> = {
+  gh: {
+    name: "GitHub CLI",
+    cmd: "gh",
+    installHint: "Install from https://cli.github.com or run: brew install gh",
+  },
+  vercel: {
+    name: "Vercel CLI",
+    cmd: "vercel",
+    installCmd: "bun add -g vercel",
+  },
+  neonctl: {
+    name: "Neon CLI",
+    cmd: "neonctl",
+    installCmd: "bun add -g neonctl",
+  },
+  sanity: {
+    name: "Sanity CLI",
+    cmd: "sanity",
+    installCmd: "bun add -g sanity",
+  },
+};
+
+async function ensureTool(key: string, s: ReturnType<typeof p.spinner>): Promise<boolean> {
+  const tool = TOOLS[key];
+  if (isInstalled(tool.cmd)) return true;
+
+  if (tool.installCmd) {
+    const shouldInstall = await cancelOrContinue(
+      `${tool.name} (${tool.cmd}) is not installed. Install it now?`,
+    );
+    if (!shouldInstall) return false;
+
+    s.start(`Installing ${tool.name}...`);
+    const result = run(tool.installCmd);
+    if (result === null) {
+      s.stop(`Failed to install ${tool.name}`);
+      return false;
+    }
+    s.stop(`${tool.name} installed`);
+    return true;
+  }
+
+  p.log.warn(
+    `${tool.name} (${pc.cyan(tool.cmd)}) is not installed.\n  ${tool.installHint}`,
+  );
+  const ready = await cancelOrContinue(`Have you installed ${tool.cmd}? Continue?`);
+  return ready && isInstalled(tool.cmd);
+}
+
+async function ensureAuth(
+  toolName: string,
+  checkCmd: string,
+  authCmd: string,
+  s: ReturnType<typeof p.spinner>,
+): Promise<boolean> {
+  s.start(`Checking ${toolName} authentication...`);
+  if (run(checkCmd) !== null) {
+    s.stop(`${toolName} authenticated`);
+    return true;
+  }
+  s.stop(`${toolName} not authenticated`);
+
+  const shouldAuth = await cancelOrContinue(
+    `You need to log in to ${toolName}. Log in now?`,
+  );
+  if (!shouldAuth) return false;
+
+  p.log.info(`Running ${pc.cyan(authCmd)} — follow the prompts:`);
+  try {
+    runInteractive(authCmd);
+  } catch {
+    p.log.error(`${toolName} authentication failed.`);
+    return false;
+  }
+
+  // Verify auth worked
+  if (run(checkCmd) !== null) {
+    p.log.success(`${toolName} authenticated`);
+    return true;
+  }
+  p.log.error(`${toolName} still not authenticated.`);
+  return false;
+}
+
+// ─── Service setup functions ─────────────────────────────────────────────────
+
+async function setupGitHub(
+  projectName: string,
+  targetDir: string,
+  s: ReturnType<typeof p.spinner>,
+): Promise<string | null> {
+  if (!(await ensureTool("gh", s))) return null;
+  if (!(await ensureAuth("GitHub", "gh auth status", "gh auth login", s))) return null;
+
+  const existing = await p.select({
+    message: "GitHub repository:",
+    options: [
+      { value: "create", label: "Create a new repo", hint: projectName },
+      { value: "existing", label: "Use an existing repo" },
+      { value: "skip", label: "Skip GitHub setup" },
+    ],
+  });
+  if (p.isCancel(existing)) { p.cancel("Cancelled."); process.exit(0); }
+
+  if (existing === "skip") return null;
+
+  if (existing === "existing") {
+    const repoUrl = await p.text({
+      message: "Enter the GitHub repo URL:",
+      placeholder: `https://github.com/yourorg/${projectName}`,
+      validate: (v) => {
+        if (!v) return "Repo URL is required";
+      },
+    });
+    if (p.isCancel(repoUrl)) { p.cancel("Cancelled."); process.exit(0); }
+    s.start("Linking to existing repo...");
+    run(`git remote add origin ${repoUrl}`, { cwd: targetDir });
+    s.stop("Linked to existing repo");
+    return repoUrl as string;
+  }
+
+  // Create new repo
+  const visibility = await p.select({
+    message: "Repository visibility:",
+    options: [
+      { value: "private", label: "Private" },
+      { value: "public", label: "Public" },
+    ],
+  });
+  if (p.isCancel(visibility)) { p.cancel("Cancelled."); process.exit(0); }
+
+  s.start(`Creating GitHub repo ${pc.cyan(projectName)}...`);
+  const result = run(
+    `gh repo create ${projectName} --${visibility} --source . --remote origin`,
+    { cwd: targetDir },
+  );
+  if (result === null) {
+    s.stop("Failed to create GitHub repo");
+    return null;
+  }
+  s.stop(`GitHub repo created: ${pc.cyan(projectName)}`);
+
+  // Get the repo URL
+  const repoUrl = run("gh repo view --json url -q .url", { cwd: targetDir });
+  return repoUrl;
+}
+
+async function setupNeon(
+  projectName: string,
+  s: ReturnType<typeof p.spinner>,
+): Promise<string | null> {
+  if (!(await ensureTool("neonctl", s))) return null;
+  if (!(await ensureAuth("Neon", "neonctl me", "neonctl auth", s))) return null;
+
+  const existing = await p.select({
+    message: "Neon database:",
+    options: [
+      { value: "create", label: "Create a new database", hint: projectName },
+      { value: "existing", label: "Use an existing database" },
+      { value: "skip", label: "Skip database setup" },
+    ],
+  });
+  if (p.isCancel(existing)) { p.cancel("Cancelled."); process.exit(0); }
+
+  if (existing === "skip") return null;
+
+  if (existing === "existing") {
+    const connStr = await p.text({
+      message: "Paste your Neon connection string (POSTGRES_URL):",
+      placeholder: "postgresql://user:pass@host/dbname?sslmode=require",
+      validate: (v) => {
+        if (!v) return "Connection string is required";
+        if (!v.startsWith("postgres")) return "Must be a PostgreSQL connection string";
+      },
+    });
+    if (p.isCancel(connStr)) { p.cancel("Cancelled."); process.exit(0); }
+    return connStr as string;
+  }
+
+  // Create new project
+  s.start(`Creating Neon database ${pc.cyan(projectName)}...`);
+  const output = run(
+    `neonctl projects create --name ${projectName} --output json`,
+  );
+  if (!output) {
+    s.stop("Failed to create Neon database");
+    return null;
+  }
+
+  try {
+    const data = JSON.parse(output);
+    const connStr =
+      data.connection_uris?.[0]?.connection_uri ||
+      data.connection_uri ||
+      null;
+    if (connStr) {
+      s.stop(`Neon database created: ${pc.cyan(projectName)}`);
+      return connStr;
+    }
+    // If JSON structure is different, try to extract from project info
+    const projectId = data.project?.id || data.id;
+    if (projectId) {
+      s.stop(`Neon project created: ${pc.cyan(projectName)}`);
+      // Get connection string from project
+      const csOutput = run(
+        `neonctl connection-string ${projectId} --output json`,
+      );
+      if (csOutput) {
+        const csData = JSON.parse(csOutput);
+        return csData.connection_string || csData.connection_uri || null;
+      }
+    }
+    s.stop("Neon database created but couldn't get connection string");
+    p.log.warn("Run `neonctl connection-string` to get your POSTGRES_URL");
+    return null;
+  } catch {
+    s.stop("Neon database created but couldn't parse output");
+    p.log.info(`Raw output: ${output}`);
+    return null;
+  }
+}
+
+async function setupSanityProject(
+  projectName: string,
+  s: ReturnType<typeof p.spinner>,
+): Promise<{ projectId: string; dataset: string } | null> {
+  if (!(await ensureTool("sanity", s))) return null;
+  if (!(await ensureAuth("Sanity", "sanity whoami", "sanity login", s))) return null;
+
+  const existing = await p.select({
+    message: "Sanity project:",
+    options: [
+      { value: "create", label: "Create a new Sanity project", hint: projectName },
+      { value: "existing", label: "Use an existing project" },
+      { value: "skip", label: "Skip Sanity setup" },
+    ],
+  });
+  if (p.isCancel(existing)) { p.cancel("Cancelled."); process.exit(0); }
+
+  if (existing === "skip") return null;
+
+  if (existing === "existing") {
+    const projectId = await p.text({
+      message: "Enter your Sanity project ID:",
+      placeholder: "abc123xy",
+      validate: (v) => {
+        if (!v) return "Project ID is required";
+      },
+    });
+    if (p.isCancel(projectId)) { p.cancel("Cancelled."); process.exit(0); }
+
+    const dataset = await p.text({
+      message: "Dataset name:",
+      placeholder: "production",
+      initialValue: "production",
+    });
+    if (p.isCancel(dataset)) { p.cancel("Cancelled."); process.exit(0); }
+
+    return { projectId: projectId as string, dataset: dataset as string };
+  }
+
+  // Create new project
+  s.start(`Creating Sanity project ${pc.cyan(projectName)}...`);
+  const output = run(
+    `sanity projects create "${projectName}" --output json`,
+  );
+  if (!output) {
+    s.stop("Failed to create Sanity project");
+    return null;
+  }
+
+  try {
+    const data = JSON.parse(output);
+    const projectId = data.projectId || data.id;
+    if (!projectId) {
+      s.stop("Sanity project created but couldn't get project ID");
+      return null;
+    }
+
+    // Create production dataset
+    run(`sanity dataset create production --project ${projectId}`);
+    s.stop(`Sanity project created: ${pc.cyan(projectId)}`);
+    return { projectId, dataset: "production" };
+  } catch {
+    s.stop("Sanity project created but couldn't parse output");
+    return null;
+  }
+}
+
+async function setupVercel(
+  projectName: string,
+  targetDir: string,
+  repoUrl: string | null,
+  s: ReturnType<typeof p.spinner>,
+): Promise<string | null> {
+  if (!(await ensureTool("vercel", s))) return null;
+  if (!(await ensureAuth("Vercel", "vercel whoami", "vercel login", s))) return null;
+
+  const existing = await p.select({
+    message: "Vercel project:",
+    options: [
+      { value: "create", label: "Create a new Vercel project", hint: projectName },
+      { value: "existing", label: "Link to an existing project" },
+      { value: "skip", label: "Skip Vercel setup" },
+    ],
+  });
+  if (p.isCancel(existing)) { p.cancel("Cancelled."); process.exit(0); }
+
+  if (existing === "skip") return null;
+
+  if (existing === "existing") {
+    s.start("Linking to existing Vercel project...");
+    try {
+      runInteractive(`vercel link --yes`, { cwd: targetDir });
+      s.stop("Linked to Vercel project");
+    } catch {
+      s.stop("Failed to link Vercel project");
+      return null;
+    }
+    return `https://${projectName}.vercel.app`;
+  }
+
+  // Create new project
+  s.start(`Creating Vercel project ${pc.cyan(projectName)}...`);
+
+  // Use vercel link to create/connect the project
+  const result = run(
+    `vercel link --yes --project ${projectName}`,
+    { cwd: targetDir },
+  );
+  if (result === null) {
+    // vercel link might fail if project doesn't exist — create it first
+    run(`vercel project add ${projectName}`, { cwd: targetDir });
+    run(`vercel link --yes --project ${projectName}`, { cwd: targetDir });
+  }
+  s.stop(`Vercel project created: ${pc.cyan(projectName)}`);
+
+  // Connect GitHub repo for auto-deploy
+  if (repoUrl) {
+    s.start("Connecting Vercel to GitHub for auto-deploy...");
+    const connected = run("vercel git connect --yes", { cwd: targetDir });
+    if (connected !== null) {
+      s.stop("Vercel connected to GitHub — pushes will auto-deploy");
+    } else {
+      s.stop("Could not auto-connect — link GitHub in the Vercel dashboard");
+    }
+  }
+
+  return `https://${projectName}.vercel.app`;
+}
+
+async function pushEnvToVercel(
+  envVars: Record<string, string>,
+  targetDir: string,
+  s: ReturnType<typeof p.spinner>,
+) {
+  s.start("Pushing environment variables to Vercel...");
+  let pushed = 0;
+  for (const [key, value] of Object.entries(envVars)) {
+    if (!value) continue;
+    // Write to all environments: production, preview, development
+    const result = run(
+      `echo "${value}" | vercel env add ${key} production preview development --yes`,
+      { cwd: targetDir },
+    );
+    if (result !== null) pushed++;
+  }
+  s.stop(`Pushed ${pushed} env var(s) to Vercel`);
+}
+
+async function askOpenAIKey(): Promise<string | null> {
+  const setup = await p.select({
+    message: "OpenAI API key (for AI-generated alt text):",
+    options: [
+      { value: "enter", label: "Enter API key now" },
+      { value: "skip", label: "Skip — set up later" },
+    ],
+  });
+  if (p.isCancel(setup)) { p.cancel("Cancelled."); process.exit(0); }
+
+  if (setup === "skip") return null;
+
+  const key = await p.text({
+    message: "Paste your OpenAI API key:",
+    placeholder: "sk-...",
+    validate: (v) => {
+      if (!v) return "API key is required";
+      if (!v.startsWith("sk-")) return "OpenAI keys start with sk-";
+    },
+  });
+  if (p.isCancel(key)) { p.cancel("Cancelled."); process.exit(0); }
+  return key as string;
+}
+
+// ─── Template configuration ──────────────────────────────────────────────────
+
+function configureTemplate(
+  targetDir: string,
+  cms: string,
+  projectName: string,
+) {
+  // Remove the CLI tool directory from the scaffolded project
+  fs.rmSync(path.join(targetDir, "create-sitekick"), {
+    recursive: true,
+    force: true,
+  });
+
+  // Delete files for the CMS we're NOT using
+  const filesToDelete = cms === "payload" ? SANITY_ONLY : PAYLOAD_ONLY;
+  for (const file of filesToDelete) {
+    const fullPath = path.join(targetDir, file);
+    if (fs.existsSync(fullPath)) {
+      fs.rmSync(fullPath, { recursive: true, force: true });
+    }
+  }
+
+  // Update the CMS index to export the right adapter
+  const cmsIndexPath = path.join(targetDir, "src/lib/cms/index.ts");
+  const adapterImport =
+    cms === "payload"
+      ? 'export { payloadAdapter as cms } from "./payload";'
+      : 'export { sanityAdapter as cms } from "./sanity";';
+
+  fs.writeFileSync(
+    cmsIndexPath,
+    `/**
+ * CMS abstraction layer.
+ * Frontend pages import from this file — never directly from Payload or Sanity.
+ */
+
+export type {
+  BlogPost,
+  Page,
+  CMSImage,
+  SiteSettings,
+  AnalyticsSettings,
+  SocialLinks,
+} from "./types";
+
+${adapterImport}
+`,
+  );
+
+  // Clean up package.json — remove deps for the other CMS
+  const pkgPath = path.join(targetDir, "package.json");
+  const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf-8"));
+  const depsToRemove = cms === "payload" ? SANITY_DEPS : PAYLOAD_DEPS;
+
+  for (const dep of depsToRemove) {
+    delete pkg.dependencies?.[dep];
+    delete pkg.devDependencies?.[dep];
+  }
+  pkg.name = projectName;
+  fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, 2) + "\n");
+
+  // For Sanity: update next.config.ts and tsconfig.json
+  if (cms === "sanity") {
+    fs.writeFileSync(
+      path.join(targetDir, "next.config.ts"),
+      `import type { NextConfig } from "next";
+
+const nextConfig: NextConfig = {
+  images: {
+    remotePatterns: [
+      {
+        protocol: "https",
+        hostname: "cdn.sanity.io",
+      },
+    ],
+  },
+};
+
+export default nextConfig;
+`,
+    );
+
+    const tsconfigPath = path.join(targetDir, "tsconfig.json");
+    const tsconfig = JSON.parse(fs.readFileSync(tsconfigPath, "utf-8"));
+    delete tsconfig.compilerOptions?.paths?.["@payload-config"];
+    fs.writeFileSync(tsconfigPath, JSON.stringify(tsconfig, null, 2) + "\n");
+  }
+
+  // Update the home page CMS link
+  const homePath = path.join(targetDir, "src/app/(frontend)/page.tsx");
+  if (fs.existsSync(homePath)) {
+    let homeContent = fs.readFileSync(homePath, "utf-8");
+    if (cms === "sanity") {
+      homeContent = homeContent.replace('href="/admin"', 'href="/studio"');
+    }
+    fs.writeFileSync(homePath, homeContent);
+  }
+
+  // Write project name into CMS defaults
+  if (cms === "payload") {
+    const generalPath = path.join(targetDir, "src/globals/General.ts");
+    if (fs.existsSync(generalPath)) {
+      let content = fs.readFileSync(generalPath, "utf-8");
+      // Update siteName default
+      content = content.replace(
+        'defaultValue: "My Site"',
+        `defaultValue: "${projectName}"`,
+      );
+      fs.writeFileSync(generalPath, content);
+    }
+  } else {
+    const settingsPath = path.join(
+      targetDir,
+      "src/sanity/schemas/siteSettings.ts",
+    );
+    if (fs.existsSync(settingsPath)) {
+      let content = fs.readFileSync(settingsPath, "utf-8");
+      content = content.replace(
+        'initialValue: "My Site"',
+        `initialValue: "${projectName}"`,
+      );
+      fs.writeFileSync(settingsPath, content);
+    }
+  }
+}
+
+function writeEnvFile(
+  targetDir: string,
+  cms: string,
+  envVars: Record<string, string>,
+) {
+  const lines = [
+    "# Site",
+    `NEXT_PUBLIC_SITE_URL=${envVars.NEXT_PUBLIC_SITE_URL || "http://localhost:3000"}`,
+    `NEXT_PUBLIC_GA_ID=`,
+    "",
+  ];
+
+  if (cms === "payload") {
+    lines.push(
+      "# Payload CMS",
+      `POSTGRES_URL=${envVars.POSTGRES_URL || ""}`,
+      `PAYLOAD_SECRET=${envVars.PAYLOAD_SECRET || ""}`,
+      `BLOB_READ_WRITE_TOKEN=${envVars.BLOB_READ_WRITE_TOKEN || ""}`,
+      `RESEND_API_KEY=${envVars.RESEND_API_KEY || ""}`,
+      `OPENAI_API_KEY=${envVars.OPENAI_API_KEY || ""}`,
+    );
+  } else {
+    lines.push(
+      "# Sanity CMS",
+      `NEXT_PUBLIC_SANITY_PROJECT_ID=${envVars.NEXT_PUBLIC_SANITY_PROJECT_ID || ""}`,
+      `NEXT_PUBLIC_SANITY_DATASET=${envVars.NEXT_PUBLIC_SANITY_DATASET || "production"}`,
+      `NEXT_PUBLIC_SANITY_API_VERSION=2024-01-01`,
+      `OPENAI_API_KEY=${envVars.OPENAI_API_KEY || ""}`,
+    );
+  }
+
+  // Write both .env.local (actual) and .env.example (template)
+  fs.writeFileSync(path.join(targetDir, ".env.local"), lines.join("\n") + "\n");
+
+  // .env.example has empty values
+  const exampleLines = lines.map((line) => {
+    if (line.startsWith("#") || line === "") return line;
+    const [key] = line.split("=");
+    // Keep defaults for non-secret values
+    if (key.startsWith("NEXT_PUBLIC_SANITY_DATASET")) return line;
+    if (key.startsWith("NEXT_PUBLIC_SANITY_API_VERSION")) return line;
+    if (key.startsWith("NEXT_PUBLIC_SITE_URL"))
+      return `${key}=http://localhost:3000`;
+    return `${key}=`;
+  });
+  fs.writeFileSync(
+    path.join(targetDir, ".env.example"),
+    exampleLines.join("\n") + "\n",
+  );
+}
+
+// ─── Main flow ───────────────────────────────────────────────────────────────
+
+async function main() {
+  p.intro(pc.bgCyan(pc.black(" create-sitekick ")));
+
+  // 1. Project name
+  const projectName =
+    process.argv[2] ||
+    ((await p.text({
+      message: "What is your project name?",
+      placeholder: "my-site",
+      validate: (v) => {
+        if (!v) return "Project name is required";
+        if (!/^[a-z0-9-]+$/.test(v))
+          return "Use lowercase letters, numbers, and hyphens only";
+      },
+    })) as string);
+
+  if (p.isCancel(projectName)) {
+    p.cancel("Cancelled.");
+    process.exit(0);
+  }
+
+  // 2. Choose CMS
+  const cms = (await p.select({
+    message: "Which CMS do you want to use?",
+    options: [
+      {
+        value: "payload",
+        label: "Payload CMS",
+        hint: "self-hosted, integrated with Next.js",
+      },
+      {
+        value: "sanity",
+        label: "Sanity",
+        hint: "hosted service, Sanity Studio",
+      },
+    ],
+  })) as string;
+
+  if (p.isCancel(cms)) {
+    p.cancel("Cancelled.");
+    process.exit(0);
+  }
+
+  const targetDir = path.resolve(process.cwd(), projectName);
+
+  if (fs.existsSync(targetDir)) {
+    p.cancel(`Directory ${pc.cyan(projectName)} already exists.`);
+    process.exit(1);
+  }
+
+  const s = p.spinner();
+
+  // 3. Clone template
+  s.start("Cloning sitekick-starter...");
+  execSync(
+    `git clone --depth 1 https://github.com/sitekickcodes/sitekick-starter.git ${targetDir}`,
+    { stdio: "pipe" },
+  );
+  fs.rmSync(path.join(targetDir, ".git"), { recursive: true, force: true });
+  s.stop("Cloned template");
+
+  // 4. Configure template for chosen CMS
+  s.start(
+    `Configuring for ${cms === "payload" ? "Payload CMS" : "Sanity"}...`,
+  );
+  configureTemplate(targetDir, cms, projectName);
+  s.stop(`Configured for ${cms === "payload" ? "Payload CMS" : "Sanity"}`);
+
+  // 5. Install dependencies first (needed before git init for lockfile)
+  s.start("Installing dependencies...");
+  try {
+    execSync("bun install", { cwd: targetDir, stdio: "pipe" });
+    s.stop("Dependencies installed");
+  } catch {
+    s.stop("Dependency install failed — run `bun install` manually");
+  }
+
+  // 6. Init git (needed before GitHub setup)
+  s.start("Initializing git...");
+  execSync("git init", { cwd: targetDir, stdio: "pipe" });
+  execSync("git add -A", { cwd: targetDir, stdio: "pipe" });
+  execSync('git commit -m "Initial commit from create-sitekick"', {
+    cwd: targetDir,
+    stdio: "pipe",
+  });
+  s.stop("Git initialized");
+
+  // Collect env vars as we go
+  const envVars: Record<string, string> = {};
+
+  // ─── GitHub setup ────────────────────────────────────────────────────────
+
+  p.log.step(pc.bold("GitHub"));
+  const repoUrl = await setupGitHub(projectName, targetDir, s);
+
+  // ─── Database / CMS-specific setup ───────────────────────────────────────
+
+  if (cms === "payload") {
+    // Neon database
+    p.log.step(pc.bold("Neon Database"));
+    const postgresUrl = await setupNeon(projectName, s);
+    if (postgresUrl) envVars.POSTGRES_URL = postgresUrl;
+
+    // Generate PAYLOAD_SECRET
+    envVars.PAYLOAD_SECRET = crypto.randomBytes(32).toString("hex");
+    p.log.success("Generated PAYLOAD_SECRET");
+  } else {
+    // Sanity project
+    p.log.step(pc.bold("Sanity"));
+    const sanityInfo = await setupSanityProject(projectName, s);
+    if (sanityInfo) {
+      envVars.NEXT_PUBLIC_SANITY_PROJECT_ID = sanityInfo.projectId;
+      envVars.NEXT_PUBLIC_SANITY_DATASET = sanityInfo.dataset;
+    }
+  }
+
+  // ─── Vercel setup ────────────────────────────────────────────────────────
+
+  p.log.step(pc.bold("Vercel"));
+  const deployUrl = await setupVercel(projectName, targetDir, repoUrl, s);
+  if (deployUrl) {
+    envVars.NEXT_PUBLIC_SITE_URL = deployUrl;
+  }
+
+  // ─── OpenAI setup ────────────────────────────────────────────────────────
+
+  p.log.step(pc.bold("OpenAI (optional)"));
+  const openaiKey = await askOpenAIKey();
+  if (openaiKey) envVars.OPENAI_API_KEY = openaiKey;
+
+  // ─── Write env files ────────────────────────────────────────────────────
+
+  s.start("Writing environment files...");
+  writeEnvFile(targetDir, cms, envVars);
+  s.stop("Environment files written");
+
+  // ─── Push env vars to Vercel ─────────────────────────────────────────────
+
+  if (deployUrl && Object.keys(envVars).length > 0) {
+    const shouldPush = await cancelOrContinue(
+      "Push environment variables to Vercel?",
+    );
+    if (shouldPush) {
+      await pushEnvToVercel(envVars, targetDir, s);
+    }
+  }
+
+  // ─── Commit env.example and push ─────────────────────────────────────────
+
+  // Commit the .env.example (not .env.local)
+  run("git add .env.example", { cwd: targetDir });
+  run('git commit -m "Add .env.example with project configuration"', {
+    cwd: targetDir,
+  });
+
+  if (repoUrl) {
+    s.start("Pushing to GitHub...");
+    const pushResult = run("git push -u origin main", { cwd: targetDir });
+    if (pushResult !== null) {
+      s.stop("Pushed to GitHub — Vercel will auto-deploy");
+    } else {
+      // Try 'master' if 'main' fails
+      const pushMaster = run("git push -u origin master", { cwd: targetDir });
+      if (pushMaster !== null) {
+        s.stop("Pushed to GitHub — Vercel will auto-deploy");
+      } else {
+        s.stop("Push failed — run `git push` manually");
+      }
+    }
+  }
+
+  // ─── Summary ──────────────────────────────────────────────────────────────
+
+  const nextSteps = [`cd ${projectName}`];
+
+  const missingVars: string[] = [];
+  if (cms === "payload") {
+    if (!envVars.POSTGRES_URL) missingVars.push("POSTGRES_URL");
+    if (!envVars.BLOB_READ_WRITE_TOKEN) missingVars.push("BLOB_READ_WRITE_TOKEN (Vercel Blob)");
+  } else {
+    if (!envVars.NEXT_PUBLIC_SANITY_PROJECT_ID) missingVars.push("NEXT_PUBLIC_SANITY_PROJECT_ID");
+  }
+
+  if (missingVars.length > 0) {
+    nextSteps.push(`# Set up missing env vars in .env.local:`);
+    for (const v of missingVars) nextSteps.push(`#   ${v}`);
+  }
+
+  if (cms === "payload") {
+    nextSteps.push(
+      "# Add Vercel Blob storage in the Vercel dashboard",
+      "# Copy BLOB_READ_WRITE_TOKEN to .env.local",
+    );
+  }
+
+  nextSteps.push("bun dev");
+  nextSteps.push(
+    `# Visit ${cms === "payload" ? "/admin" : "/studio"} to create your first user`,
+  );
+
+  p.note(nextSteps.join("\n"), "Next steps");
+
+  const summary: string[] = [];
+  if (repoUrl) summary.push(`GitHub: ${pc.cyan(repoUrl)}`);
+  if (deployUrl) summary.push(`Vercel: ${pc.cyan(deployUrl)}`);
+  if (envVars.POSTGRES_URL) summary.push(`Database: ${pc.green("connected")}`);
+  if (envVars.NEXT_PUBLIC_SANITY_PROJECT_ID)
+    summary.push(
+      `Sanity: ${pc.green(envVars.NEXT_PUBLIC_SANITY_PROJECT_ID)}`,
+    );
+
+  if (summary.length > 0) {
+    p.log.info(summary.join("\n"));
+  }
+
+  p.outro(
+    pc.green("Done!") +
+      " Your Sitekick project is ready at " +
+      pc.cyan(`./${projectName}`),
+  );
+}
+
+main().catch((err) => {
+  console.error(err);
+  process.exit(1);
+});

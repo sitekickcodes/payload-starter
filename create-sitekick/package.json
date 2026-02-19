@@ -1,0 +1,29 @@
+{
+  "name": "create-sitekick",
+  "version": "0.1.0",
+  "description": "Scaffold a new Sitekick project with your choice of CMS",
+  "type": "module",
+  "bin": {
+    "create-sitekick": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "bun build src/index.ts --outdir dist --target node",
+    "dev": "bun run src/index.ts"
+  },
+  "dependencies": {
+    "@clack/prompts": "^1.0.1",
+    "picocolors": "^1.1.1"
+  },
+  "files": [
+    "dist"
+  ],
+  "keywords": [
+    "sitekick",
+    "nextjs",
+    "payload",
+    "sanity",
+    "cms",
+    "starter"
+  ],
+  "license": "MIT"
+}
