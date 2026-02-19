@@ -4,7 +4,7 @@
   "description": "Scaffold a new Sitekick project with your choice of CMS",
   "type": "module",
   "bin": {
-    "create-sitekick": "./dist/index.js"
+    "create-sitekick": "dist/index.js"
   },
   "scripts": {
     "build": "bun build src/index.ts --outdir dist --target node",
@@ -15,8 +15,15 @@
     "picocolors": "^1.1.1"
   },
   "files": [
-    "dist"
+    "dist",
+    "README.md"
   ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/sitekickcodes/sitekick-starter.git",
+    "directory": "create-sitekick"
+  },
+  "homepage": "https://github.com/sitekickcodes/sitekick-starter#readme",
   "keywords": [
     "sitekick",
     "nextjs",
