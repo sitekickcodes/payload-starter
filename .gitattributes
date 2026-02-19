@@ -1,0 +1,3 @@
+# Mark generated/vendored files so GitHub excludes them from language stats
+create-sitekick/dist/** linguist-generated=true
+src/app/(payload)/admin/importMap.js linguist-generated=true
