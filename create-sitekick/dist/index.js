@@ -1269,57 +1269,100 @@ function runInteractive(cmd, opts) {
 function isInstalled(cmd) {
   return run(`which ${cmd}`) !== null;
 }
+var scaffoldedDir = null;
+function abort(message = "Cancelled.") {
+  if (scaffoldedDir && fs.existsSync(scaffoldedDir)) {
+    fs.rmSync(scaffoldedDir, { recursive: true, force: true });
+  }
+  Ne(message);
+  process.exit(0);
+}
 async function cancelOrContinue(message) {
   const result = await Re({ message, initialValue: true });
-  if (Ct(result)) {
-    Ne("Cancelled.");
-    process.exit(0);
-  }
+  if (Ct(result))
+    abort();
   return result;
 }
 var TOOLS = {
   gh: {
     name: "GitHub CLI",
     cmd: "gh",
-    installHint: "Install from https://cli.github.com or run: brew install gh"
+    brewPkg: "gh"
   },
   vercel: {
     name: "Vercel CLI",
     cmd: "vercel",
-    installCmd: "bun add -g vercel"
+    bunPkg: "vercel"
   },
   neonctl: {
     name: "Neon CLI",
     cmd: "neonctl",
-    installCmd: "bun add -g neonctl"
+    bunPkg: "neonctl"
   },
   sanity: {
     name: "Sanity CLI",
     cmd: "sanity",
-    installCmd: "bun add -g sanity"
+    bunPkg: "sanity"
   }
 };
+async function ensureBrew(s) {
+  if (isInstalled("brew"))
+    return true;
+  const shouldInstall = await cancelOrContinue("Homebrew is needed to install some tools. Install it now?");
+  if (!shouldInstall)
+    return false;
+  s.start("Installing Homebrew...");
+  try {
+    execSync('/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"', { stdio: "inherit" });
+  } catch {
+    s.stop("Failed to install Homebrew");
+    return false;
+  }
+  const brewPaths = ["/opt/homebrew/bin/brew", "/usr/local/bin/brew"];
+  for (const brewPath of brewPaths) {
+    try {
+      const shellEnv = execSync(`${brewPath} shellenv`, { encoding: "utf-8" });
+      for (const line of shellEnv.split(`
+`)) {
+        const match = line.match(/export\s+PATH="([^"]+)"/);
+        if (match)
+          process.env.PATH = `${match[1]}:${process.env.PATH}`;
+      }
+      break;
+    } catch {}
+  }
+  if (!isInstalled("brew")) {
+    s.stop("Homebrew installed but not found on PATH. Restart your terminal and try again.");
+    return false;
+  }
+  s.stop("Homebrew installed");
+  return true;
+}
 async function ensureTool(key, s) {
   const tool = TOOLS[key];
   if (isInstalled(tool.cmd))
     return true;
-  if (tool.installCmd) {
-    const shouldInstall = await cancelOrContinue(`${tool.name} (${tool.cmd}) is not installed. Install it now?`);
-    if (!shouldInstall)
+  const shouldInstall = await cancelOrContinue(`${tool.name} (${tool.cmd}) is not installed. Install it now?`);
+  if (!shouldInstall)
+    return false;
+  let installCmd;
+  if (tool.bunPkg) {
+    installCmd = `bun add -g ${tool.bunPkg}`;
+  } else if (tool.brewPkg) {
+    if (!await ensureBrew(s))
       return false;
-    s.start(`Installing ${tool.name}...`);
-    const result = run(tool.installCmd);
-    if (result === null) {
-      s.stop(`Failed to install ${tool.name}`);
-      return false;
-    }
-    s.stop(`${tool.name} installed`);
-    return true;
+    installCmd = `brew install ${tool.brewPkg}`;
+  } else {
+    return false;
   }
-  R2.warn(`${tool.name} (${import_picocolors3.default.cyan(tool.cmd)}) is not installed.
-  ${tool.installHint}`);
-  const ready = await cancelOrContinue(`Have you installed ${tool.cmd}? Continue?`);
-  return ready && isInstalled(tool.cmd);
+  s.start(`Installing ${tool.name}...`);
+  const result = run(installCmd);
+  if (result === null) {
+    s.stop(`Failed to install ${tool.name}`);
+    return false;
+  }
+  s.stop(`${tool.name} installed`);
+  return true;
 }
 async function ensureAuth(toolName, checkCmd, authCmd, s) {
   s.start(`Checking ${toolName} authentication...`);
@@ -1360,10 +1403,8 @@ async function selectGitHubOrg() {
       ...orgs.map((org) => ({ value: org, label: org }))
     ]
   });
-  if (Ct(selected)) {
-    Ne("Cancelled.");
-    process.exit(0);
-  }
+  if (Ct(selected))
+    abort();
   return selected === "__personal__" ? null : selected;
 }
 async function selectVercelTeam() {
@@ -1402,10 +1443,8 @@ async function selectVercelTeam() {
       }))
     ]
   });
-  if (Ct(selected)) {
-    Ne("Cancelled.");
-    process.exit(0);
-  }
+  if (Ct(selected))
+    abort();
   return selected === "__personal__" ? null : selected;
 }
 async function selectNeonOrg() {
@@ -1427,10 +1466,8 @@ async function selectNeonOrg() {
         }))
       ]
     });
-    if (Ct(selected)) {
-      Ne("Cancelled.");
-      process.exit(0);
-    }
+    if (Ct(selected))
+      abort();
     return selected === "__personal__" ? null : selected;
   } catch {
     return null;
@@ -1449,10 +1486,8 @@ async function setupGitHub(projectName, targetDir, s) {
       { value: "skip", label: "Skip GitHub setup" }
     ]
   });
-  if (Ct(existing)) {
-    Ne("Cancelled.");
-    process.exit(0);
-  }
+  if (Ct(existing))
+    abort();
   if (existing === "skip")
     return null;
   if (existing === "existing") {
@@ -1464,10 +1499,8 @@ async function setupGitHub(projectName, targetDir, s) {
           return "Repo URL is required";
       }
     });
-    if (Ct(repoUrl2)) {
-      Ne("Cancelled.");
-      process.exit(0);
-    }
+    if (Ct(repoUrl2))
+      abort();
     s.start("Linking to existing repo...");
     run(`git remote add origin ${repoUrl2}`, { cwd: targetDir });
     s.stop("Linked to existing repo");
@@ -1481,10 +1514,8 @@ async function setupGitHub(projectName, targetDir, s) {
       { value: "public", label: "Public" }
     ]
   });
-  if (Ct(visibility)) {
-    Ne("Cancelled.");
-    process.exit(0);
-  }
+  if (Ct(visibility))
+    abort();
   const repoFullName = ghOrg ? `${ghOrg}/${projectName}` : projectName;
   s.start(`Creating GitHub repo ${import_picocolors3.default.cyan(repoFullName)}...`);
   const result = run(`gh repo create ${repoFullName} --${visibility} --source . --remote origin`, { cwd: targetDir });
@@ -1509,10 +1540,8 @@ async function setupNeon(projectName, s) {
       { value: "skip", label: "Skip database setup" }
     ]
   });
-  if (Ct(existing)) {
-    Ne("Cancelled.");
-    process.exit(0);
-  }
+  if (Ct(existing))
+    abort();
   if (existing === "skip")
     return null;
   if (existing === "existing") {
@@ -1526,10 +1555,8 @@ async function setupNeon(projectName, s) {
           return "Must be a PostgreSQL connection string";
       }
     });
-    if (Ct(connStr)) {
-      Ne("Cancelled.");
-      process.exit(0);
-    }
+    if (Ct(connStr))
+      abort();
     return connStr;
   }
   const neonOrgId = await selectNeonOrg();
@@ -1583,10 +1610,8 @@ async function setupSanityProject(projectName, s) {
       { value: "skip", label: "Skip Sanity setup" }
     ]
   });
-  if (Ct(existing)) {
-    Ne("Cancelled.");
-    process.exit(0);
-  }
+  if (Ct(existing))
+    abort();
   if (existing === "skip")
     return null;
   if (existing === "existing") {
@@ -1598,19 +1623,15 @@ async function setupSanityProject(projectName, s) {
           return "Project ID is required";
       }
     });
-    if (Ct(projectId)) {
-      Ne("Cancelled.");
-      process.exit(0);
-    }
+    if (Ct(projectId))
+      abort();
     const dataset = await Ze({
       message: "Dataset name:",
       placeholder: "production",
       initialValue: "production"
     });
-    if (Ct(dataset)) {
-      Ne("Cancelled.");
-      process.exit(0);
-    }
+    if (Ct(dataset))
+      abort();
     return { projectId, dataset };
   }
   s.start(`Creating Sanity project ${import_picocolors3.default.cyan(projectName)}...`);
@@ -1647,10 +1668,8 @@ async function setupVercel(projectName, targetDir, repoUrl, s) {
       { value: "skip", label: "Skip Vercel setup" }
     ]
   });
-  if (Ct(existing)) {
-    Ne("Cancelled.");
-    process.exit(0);
-  }
+  if (Ct(existing))
+    abort();
   if (existing === "skip")
     return { url: null, scope: null };
   const vercelTeam = await selectVercelTeam();
@@ -1705,16 +1724,14 @@ async function pushEnvToVercel(envVars, targetDir, scope, s) {
 }
 async function askOpenAIKey() {
   const setup = await Je({
-    message: "OpenAI API key (for AI-generated alt text):",
+    message: "OpenAI API key:",
     options: [
       { value: "enter", label: "Enter API key now" },
       { value: "skip", label: "Skip — set up later" }
     ]
   });
-  if (Ct(setup)) {
-    Ne("Cancelled.");
-    process.exit(0);
-  }
+  if (Ct(setup))
+    abort();
   if (setup === "skip")
     return null;
   const key = await Ze({
@@ -1727,10 +1744,8 @@ async function askOpenAIKey() {
         return "OpenAI keys start with sk-";
     }
   });
-  if (Ct(key)) {
-    Ne("Cancelled.");
-    process.exit(0);
-  }
+  if (Ct(key))
+    abort();
   return key;
 }
 function configureTemplate(targetDir, cms, projectName) {
@@ -1862,10 +1877,8 @@ async function main() {
         return "Use lowercase letters, numbers, and hyphens only";
     }
   });
-  if (Ct(projectName)) {
-    Ne("Cancelled.");
-    process.exit(0);
-  }
+  if (Ct(projectName))
+    abort();
   const cms = await Je({
     message: "Which CMS do you want to use?",
     options: [
@@ -1881,19 +1894,19 @@ async function main() {
       }
     ]
   });
-  if (Ct(cms)) {
-    Ne("Cancelled.");
-    process.exit(0);
-  }
+  if (Ct(cms))
+    abort();
   const targetDir = path.resolve(process.cwd(), projectName);
   if (fs.existsSync(targetDir)) {
     Ne(`Directory ${import_picocolors3.default.cyan(projectName)} already exists.`);
     process.exit(1);
   }
   const s = bt2();
+  await ensureBrew(s);
   s.start("Cloning sitekick-starter...");
   execSync(`git clone --depth 1 https://github.com/sitekickcodes/sitekick-starter.git ${targetDir}`, { stdio: "pipe" });
   fs.rmSync(path.join(targetDir, ".git"), { recursive: true, force: true });
+  scaffoldedDir = targetDir;
   s.stop("Cloned template");
   s.start(`Configuring for ${cms === "payload" ? "Payload CMS" : "Sanity"}...`);
   configureTemplate(targetDir, cms, projectName);

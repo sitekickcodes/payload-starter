@@ -110,7 +110,7 @@ The CLI handles authentication and resource creation for each service:
 | **Neon** (`neonctl`) | Provisions a Postgres database, returns the connection string |
 | **Vercel** (`vercel`) | Creates a project, links to GitHub, pushes env vars |
 | **Sanity** (`sanity`) | Creates a Sanity project and production dataset |
-| **OpenAI** | Stores your API key for AI-powered alt text generation |
+| **OpenAI** | Stores your API key for AI-powered features |
 
 Each step checks if the CLI tool is installed (and offers to install it), verifies authentication (and prompts login if needed), and asks whether to create a new resource or link an existing one.
 

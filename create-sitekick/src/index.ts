@@ -69,13 +69,22 @@ function isInstalled(cmd: string): boolean {
   return run(`which ${cmd}`) !== null;
 }
 
+/** The scaffolded project directory — set once cloning starts. */
+let scaffoldedDir: string | null = null;
+
+/** Clean up scaffolded directory and exit. */
+function abort(message = "Cancelled."): never {
+  if (scaffoldedDir && fs.existsSync(scaffoldedDir)) {
+    fs.rmSync(scaffoldedDir, { recursive: true, force: true });
+  }
+  p.cancel(message);
+  process.exit(0);
+}
+
 /** Prompt to cancel or continue when something is missing. */
 async function cancelOrContinue(message: string): Promise<boolean> {
   const result = await p.confirm({ message, initialValue: true });
-  if (p.isCancel(result)) {
-    p.cancel("Cancelled.");
-    process.exit(0);
-  }
+  if (p.isCancel(result)) abort();
   return result as boolean;
 }
 
@@ -84,58 +93,104 @@ async function cancelOrContinue(message: string): Promise<boolean> {
 interface ToolDef {
   name: string;
   cmd: string;
-  installCmd?: string;
-  installHint?: string;
+  brewPkg?: string;
+  bunPkg?: string;
 }
 
 const TOOLS: Record<string, ToolDef> = {
   gh: {
     name: "GitHub CLI",
     cmd: "gh",
-    installHint: "Install from https://cli.github.com or run: brew install gh",
+    brewPkg: "gh",
   },
   vercel: {
     name: "Vercel CLI",
     cmd: "vercel",
-    installCmd: "bun add -g vercel",
+    bunPkg: "vercel",
   },
   neonctl: {
     name: "Neon CLI",
     cmd: "neonctl",
-    installCmd: "bun add -g neonctl",
+    bunPkg: "neonctl",
   },
   sanity: {
     name: "Sanity CLI",
     cmd: "sanity",
-    installCmd: "bun add -g sanity",
+    bunPkg: "sanity",
   },
 };
 
+/** Ensure Homebrew is installed, offering to install it if missing. Returns false if unavailable. */
+async function ensureBrew(s: ReturnType<typeof p.spinner>): Promise<boolean> {
+  if (isInstalled("brew")) return true;
+
+  const shouldInstall = await cancelOrContinue(
+    "Homebrew is needed to install some tools. Install it now?",
+  );
+  if (!shouldInstall) return false;
+
+  s.start("Installing Homebrew...");
+  try {
+    execSync(
+      '/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"',
+      { stdio: "inherit" },
+    );
+  } catch {
+    s.stop("Failed to install Homebrew");
+    return false;
+  }
+
+  // Homebrew may need to be added to PATH on Apple Silicon
+  const brewPaths = ["/opt/homebrew/bin/brew", "/usr/local/bin/brew"];
+  for (const brewPath of brewPaths) {
+    try {
+      const shellEnv = execSync(`${brewPath} shellenv`, { encoding: "utf-8" });
+      for (const line of shellEnv.split("\n")) {
+        const match = line.match(/export\s+PATH="([^"]+)"/);
+        if (match) process.env.PATH = `${match[1]}:${process.env.PATH}`;
+      }
+      break;
+    } catch { /* skip */ }
+  }
+
+  if (!isInstalled("brew")) {
+    s.stop("Homebrew installed but not found on PATH. Restart your terminal and try again.");
+    return false;
+  }
+
+  s.stop("Homebrew installed");
+  return true;
+}
+
+/** Ensure a CLI tool is installed, offering to install it. Returns false if unavailable. */
 async function ensureTool(key: string, s: ReturnType<typeof p.spinner>): Promise<boolean> {
   const tool = TOOLS[key];
   if (isInstalled(tool.cmd)) return true;
 
-  if (tool.installCmd) {
-    const shouldInstall = await cancelOrContinue(
-      `${tool.name} (${tool.cmd}) is not installed. Install it now?`,
-    );
-    if (!shouldInstall) return false;
+  const shouldInstall = await cancelOrContinue(
+    `${tool.name} (${tool.cmd}) is not installed. Install it now?`,
+  );
+  if (!shouldInstall) return false;
 
-    s.start(`Installing ${tool.name}...`);
-    const result = run(tool.installCmd);
-    if (result === null) {
-      s.stop(`Failed to install ${tool.name}`);
-      return false;
-    }
-    s.stop(`${tool.name} installed`);
-    return true;
+  // Determine install command
+  let installCmd: string;
+  if (tool.bunPkg) {
+    installCmd = `bun add -g ${tool.bunPkg}`;
+  } else if (tool.brewPkg) {
+    if (!(await ensureBrew(s))) return false;
+    installCmd = `brew install ${tool.brewPkg}`;
+  } else {
+    return false;
   }
 
-  p.log.warn(
-    `${tool.name} (${pc.cyan(tool.cmd)}) is not installed.\n  ${tool.installHint}`,
-  );
-  const ready = await cancelOrContinue(`Have you installed ${tool.cmd}? Continue?`);
-  return ready && isInstalled(tool.cmd);
+  s.start(`Installing ${tool.name}...`);
+  const result = run(installCmd);
+  if (result === null) {
+    s.stop(`Failed to install ${tool.name}`);
+    return false;
+  }
+  s.stop(`${tool.name} installed`);
+  return true;
 }
 
 async function ensureAuth(
@@ -189,7 +244,7 @@ async function selectGitHubOrg(): Promise<string | null> {
       ...orgs.map((org) => ({ value: org, label: org })),
     ],
   });
-  if (p.isCancel(selected)) { p.cancel("Cancelled."); process.exit(0); }
+  if (p.isCancel(selected)) abort();
   return selected === "__personal__" ? null : (selected as string);
 }
 
@@ -230,7 +285,7 @@ async function selectVercelTeam(): Promise<string | null> {
       })),
     ],
   });
-  if (p.isCancel(selected)) { p.cancel("Cancelled."); process.exit(0); }
+  if (p.isCancel(selected)) abort();
   return selected === "__personal__" ? null : (selected as string);
 }
 
@@ -253,7 +308,7 @@ async function selectNeonOrg(): Promise<string | null> {
         })),
       ],
     });
-    if (p.isCancel(selected)) { p.cancel("Cancelled."); process.exit(0); }
+    if (p.isCancel(selected)) abort();
     return selected === "__personal__" ? null : (selected as string);
   } catch {
     return null;
@@ -278,7 +333,7 @@ async function setupGitHub(
       { value: "skip", label: "Skip GitHub setup" },
     ],
   });
-  if (p.isCancel(existing)) { p.cancel("Cancelled."); process.exit(0); }
+  if (p.isCancel(existing)) abort();
 
   if (existing === "skip") return null;
 
@@ -290,7 +345,7 @@ async function setupGitHub(
         if (!v) return "Repo URL is required";
       },
     });
-    if (p.isCancel(repoUrl)) { p.cancel("Cancelled."); process.exit(0); }
+    if (p.isCancel(repoUrl)) abort();
     s.start("Linking to existing repo...");
     run(`git remote add origin ${repoUrl}`, { cwd: targetDir });
     s.stop("Linked to existing repo");
@@ -307,7 +362,7 @@ async function setupGitHub(
       { value: "public", label: "Public" },
     ],
   });
-  if (p.isCancel(visibility)) { p.cancel("Cancelled."); process.exit(0); }
+  if (p.isCancel(visibility)) abort();
 
   const repoFullName = ghOrg ? `${ghOrg}/${projectName}` : projectName;
   s.start(`Creating GitHub repo ${pc.cyan(repoFullName)}...`);
@@ -341,7 +396,7 @@ async function setupNeon(
       { value: "skip", label: "Skip database setup" },
     ],
   });
-  if (p.isCancel(existing)) { p.cancel("Cancelled."); process.exit(0); }
+  if (p.isCancel(existing)) abort();
 
   if (existing === "skip") return null;
 
@@ -354,7 +409,7 @@ async function setupNeon(
         if (!v.startsWith("postgres")) return "Must be a PostgreSQL connection string";
       },
     });
-    if (p.isCancel(connStr)) { p.cancel("Cancelled."); process.exit(0); }
+    if (p.isCancel(connStr)) abort();
     return connStr as string;
   }
 
@@ -431,7 +486,7 @@ async function setupSanityProject(
       { value: "skip", label: "Skip Sanity setup" },
     ],
   });
-  if (p.isCancel(existing)) { p.cancel("Cancelled."); process.exit(0); }
+  if (p.isCancel(existing)) abort();
 
   if (existing === "skip") return null;
 
@@ -443,14 +498,14 @@ async function setupSanityProject(
         if (!v) return "Project ID is required";
       },
     });
-    if (p.isCancel(projectId)) { p.cancel("Cancelled."); process.exit(0); }
+    if (p.isCancel(projectId)) abort();
 
     const dataset = await p.text({
       message: "Dataset name:",
       placeholder: "production",
       initialValue: "production",
     });
-    if (p.isCancel(dataset)) { p.cancel("Cancelled."); process.exit(0); }
+    if (p.isCancel(dataset)) abort();
 
     return { projectId: projectId as string, dataset: dataset as string };
   }
@@ -501,7 +556,7 @@ async function setupVercel(
       { value: "skip", label: "Skip Vercel setup" },
     ],
   });
-  if (p.isCancel(existing)) { p.cancel("Cancelled."); process.exit(0); }
+  if (p.isCancel(existing)) abort();
 
   if (existing === "skip") return { url: null, scope: null };
 
@@ -581,13 +636,13 @@ async function pushEnvToVercel(
 
 async function askOpenAIKey(): Promise<string | null> {
   const setup = await p.select({
-    message: "OpenAI API key (for AI-generated alt text):",
+    message: "OpenAI API key:",
     options: [
       { value: "enter", label: "Enter API key now" },
       { value: "skip", label: "Skip — set up later" },
     ],
   });
-  if (p.isCancel(setup)) { p.cancel("Cancelled."); process.exit(0); }
+  if (p.isCancel(setup)) abort();
 
   if (setup === "skip") return null;
 
@@ -599,7 +654,7 @@ async function askOpenAIKey(): Promise<string | null> {
       if (!v.startsWith("sk-")) return "OpenAI keys start with sk-";
     },
   });
-  if (p.isCancel(key)) { p.cancel("Cancelled."); process.exit(0); }
+  if (p.isCancel(key)) abort();
   return key as string;
 }
 
@@ -798,10 +853,7 @@ async function main() {
       },
     })) as string);
 
-  if (p.isCancel(projectName)) {
-    p.cancel("Cancelled.");
-    process.exit(0);
-  }
+  if (p.isCancel(projectName)) abort();
 
   // 2. Choose CMS
   const cms = (await p.select({
@@ -820,10 +872,7 @@ async function main() {
     ],
   })) as string;
 
-  if (p.isCancel(cms)) {
-    p.cancel("Cancelled.");
-    process.exit(0);
-  }
+  if (p.isCancel(cms)) abort();
 
   const targetDir = path.resolve(process.cwd(), projectName);
 
@@ -834,23 +883,28 @@ async function main() {
 
   const s = p.spinner();
 
-  // 3. Clone template
+  // 3. Check prerequisites — Homebrew is needed for GitHub CLI
+  // If declined, GitHub CLI setup will be skipped later
+  await ensureBrew(s);
+
+  // 4. Clone template
   s.start("Cloning sitekick-starter...");
   execSync(
     `git clone --depth 1 https://github.com/sitekickcodes/sitekick-starter.git ${targetDir}`,
     { stdio: "pipe" },
   );
   fs.rmSync(path.join(targetDir, ".git"), { recursive: true, force: true });
+  scaffoldedDir = targetDir;
   s.stop("Cloned template");
 
-  // 4. Configure template for chosen CMS
+  // 5. Configure template for chosen CMS
   s.start(
     `Configuring for ${cms === "payload" ? "Payload CMS" : "Sanity"}...`,
   );
   configureTemplate(targetDir, cms, projectName);
   s.stop(`Configured for ${cms === "payload" ? "Payload CMS" : "Sanity"}`);
 
-  // 5. Install dependencies first (needed before git init for lockfile)
+  // 6. Install dependencies first (needed before git init for lockfile)
   s.start("Installing dependencies...");
   try {
     execSync("bun install", { cwd: targetDir, stdio: "pipe" });
@@ -859,7 +913,7 @@ async function main() {
     s.stop("Dependency install failed — run `bun install` manually");
   }
 
-  // 6. Init git (needed before GitHub setup)
+  // 7. Init git (needed before GitHub setup)
   s.start("Initializing git...");
   execSync("git init", { cwd: targetDir, stdio: "pipe" });
   execSync("git add -A", { cwd: targetDir, stdio: "pipe" });
