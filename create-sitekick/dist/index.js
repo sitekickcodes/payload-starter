@@ -1318,18 +1318,11 @@ async function ensureBrew(s) {
     s.stop("Failed to install Homebrew");
     return false;
   }
-  const brewPaths = ["/opt/homebrew/bin/brew", "/usr/local/bin/brew"];
-  for (const brewPath of brewPaths) {
-    try {
-      const shellEnv = execSync(`${brewPath} shellenv`, { encoding: "utf-8" });
-      for (const line of shellEnv.split(`
-`)) {
-        const match = line.match(/export\s+PATH="([^"]+)"/);
-        if (match)
-          process.env.PATH = `${match[1]}:${process.env.PATH}`;
-      }
-      break;
-    } catch {}
+  const brewDirs = ["/opt/homebrew/bin", "/opt/homebrew/sbin", "/usr/local/bin", "/usr/local/sbin"];
+  const currentPath = process.env.PATH || "";
+  const newDirs = brewDirs.filter((d2) => !currentPath.includes(d2));
+  if (newDirs.length > 0) {
+    process.env.PATH = `${newDirs.join(":")}:${currentPath}`;
   }
   if (!isInstalled("brew")) {
     s.stop("Homebrew installed but not found on PATH. Restart your terminal and try again.");

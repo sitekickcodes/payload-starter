@@ -140,17 +140,12 @@ async function ensureBrew(s: ReturnType<typeof p.spinner>): Promise<boolean> {
     return false;
   }
 
-  // Homebrew may need to be added to PATH on Apple Silicon
-  const brewPaths = ["/opt/homebrew/bin/brew", "/usr/local/bin/brew"];
-  for (const brewPath of brewPaths) {
-    try {
-      const shellEnv = execSync(`${brewPath} shellenv`, { encoding: "utf-8" });
-      for (const line of shellEnv.split("\n")) {
-        const match = line.match(/export\s+PATH="([^"]+)"/);
-        if (match) process.env.PATH = `${match[1]}:${process.env.PATH}`;
-      }
-      break;
-    } catch { /* skip */ }
+  // Add Homebrew to PATH for this process (Apple Silicon + Intel paths)
+  const brewDirs = ["/opt/homebrew/bin", "/opt/homebrew/sbin", "/usr/local/bin", "/usr/local/sbin"];
+  const currentPath = process.env.PATH || "";
+  const newDirs = brewDirs.filter((d) => !currentPath.includes(d));
+  if (newDirs.length > 0) {
+    process.env.PATH = `${newDirs.join(":")}:${currentPath}`;
   }
 
   if (!isInstalled("brew")) {
