@@ -3,9 +3,10 @@
 ## Stack
 
 - Next.js 16 (App Router, React Server Components, TypeScript)
-- Payload CMS 3 (headless CMS at /admin)
-- Neon Postgres via @payloadcms/db-vercel-postgres
-- Vercel Blob for file/image storage
+- Payload CMS 3 (headless CMS at /admin) OR Sanity (hosted CMS at /studio)
+- Neon Postgres via @payloadcms/db-vercel-postgres (Payload only)
+- Vercel Blob for file/image storage (Payload only)
+- Sanity CDN for content and media (Sanity only)
 - Tailwind CSS v4 with CSS variables
 - shadcn/ui with Base UI
 - Bun as package manager (not npm/yarn/pnpm)
@@ -21,13 +22,29 @@
 
 ## Project Structure
 
-- `src/app/(frontend)/` — site pages and layouts
+- `src/app/(frontend)/` — site pages and layouts (CMS-agnostic)
 - `src/app/(payload)/` — Payload admin and API routes (auto-generated, do not modify)
+- `src/app/studio/` — Sanity Studio route (Sanity only)
 - `src/collections/` — Payload CMS collection configs
+- `src/globals/` — Payload CMS global configs (General, Analytics, Social Links)
+- `src/sanity/` — Sanity schemas, client, queries (Sanity only)
+- `src/lib/cms/` — CMS abstraction layer (types, adapters, index)
+- `src/components/payload/` — Payload admin panel customizations
 - `src/components/ui/` — shadcn/ui components
 - `src/lib/` — shared utilities
 - `src/hooks/` — custom React hooks
 - `public/images/`, `public/icons/`, `public/videos/`, `public/fonts/`, `public/og/` — static assets
+- `create-sitekick/` — CLI scaffolding tool (published separately to npm)
+
+## CMS Abstraction Layer
+
+- Frontend pages import from `@/lib/cms` — never directly from Payload or Sanity
+- `src/lib/cms/types.ts` defines shared interfaces: `BlogPost`, `Page`, `CMSImage`, `SiteSettings`, `AnalyticsSettings`, `SocialLinks`
+- `src/lib/cms/payload.ts` implements the adapter using Payload's local API
+- `src/lib/cms/sanity.ts` implements the adapter using GROQ queries
+- `src/lib/cms/index.ts` re-exports the active adapter (set during scaffolding)
+- The `CMSAdapter` interface in types.ts is the contract both adapters fulfill
+- When adding new content types, update types.ts first, then implement in both adapters
 
 ## Coding Conventions
 
@@ -60,10 +77,19 @@
 ## Payload CMS
 
 - Collections live in `src/collections/` and are registered in `src/payload.config.ts`
-- After changing collections, run `bun run generate:types` to update `src/payload-types.ts`
+- Globals live in `src/globals/` and are registered in `src/payload.config.ts`
+- After changing collections/globals, run `bun run generate:types` to update `src/payload-types.ts`
 - Use `payload.db.drizzle` for custom database queries outside Payload collections
 - Media uploads go to Vercel Blob automatically — do not store uploads locally
 - The (payload) route group files are auto-generated — do not edit them manually
+- Admin title dynamically shows the business name from the General global
+
+## Sanity CMS
+
+- Schemas live in `src/sanity/schemas/` and are registered in `src/sanity/config.ts`
+- Client config is in `src/sanity/client.ts`, GROQ queries in `src/sanity/queries.ts`
+- Environment variables: `NEXT_PUBLIC_SANITY_PROJECT_ID`, `NEXT_PUBLIC_SANITY_DATASET`, `NEXT_PUBLIC_SANITY_API_VERSION`
+- Sanity Studio is embedded at `/studio` via `src/app/studio/[[...tool]]/page.tsx`
 
 ## Environment Variables
 
@@ -75,5 +101,5 @@
 ## Git
 
 - Do not commit `.env.local` or any `.env` files (except `.env.example`)
-- Do not commit `node_modules/`, `.next/`, or `src/app/(payload)/admin/importMap.js`
+- Do not commit `node_modules/` or `.next/`
 - Use descriptive commit messages

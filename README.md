@@ -1,19 +1,66 @@
 # Sitekick Starter
 
-The foundation for every Sitekick project. A pre-configured Next.js starter with Payload CMS, our typography system, component library, and deployment config baked in so the team can skip setup and start building.
+The foundation for every Sitekick project. A pre-configured Next.js starter with your choice of CMS, a shared typography system, component library, and deployment config baked in so the team can skip setup and start building.
+
+## Quick Start
+
+```bash
+bun create sitekick my-site
+```
+
+Or with npx:
+
+```bash
+npx create-sitekick my-site
+```
+
+The CLI walks you through choosing a CMS, provisioning services (GitHub, database, Vercel), and pushing your first deploy.
 
 ## Stack
 
 - **Next.js 16** — App Router, React Server Components, TypeScript
-- **Payload CMS 3** — Headless CMS with admin panel at `/admin`
-- **Neon Postgres** — Serverless database via `@payloadcms/db-vercel-postgres`
-- **Vercel Blob** — File/image storage via `@payloadcms/storage-vercel-blob`
 - **Tailwind CSS v4** — Utility-first styling with CSS variables
 - **shadcn/ui** — Component library using **Base UI**
 - **Bun** — Package manager and runtime
 - **Deployed on Vercel**
 
-## Getting Started
+### CMS Options
+
+| | Payload CMS | Sanity |
+|---|---|---|
+| **Hosting** | Self-hosted inside your Next.js app | Hosted service (Sanity-managed) |
+| **Admin** | `/admin` | `/studio` |
+| **Database** | Neon Postgres | Sanity CDN |
+| **Media** | Vercel Blob | Sanity Image CDN |
+| **Rich text** | Lexical editor | Portable Text |
+| **Query language** | Local API (Payload SDK) | GROQ |
+
+Both options produce **identical frontend pages** thanks to the CMS abstraction layer.
+
+## CMS Abstraction Layer
+
+Frontend pages never import from Payload or Sanity directly. They import from `src/lib/cms/`:
+
+```tsx
+import { cms } from "@/lib/cms";
+import type { BlogPost } from "@/lib/cms";
+
+export default async function BlogPage() {
+  const posts = await cms.getBlogPosts();
+  return posts.map((post) => <BlogCard key={post.id} post={post} />);
+}
+```
+
+This works identically whether Payload or Sanity is powering the backend. The adapter pattern is defined in:
+
+| File | Purpose |
+|------|---------|
+| `src/lib/cms/types.ts` | Shared content interfaces (`BlogPost`, `Page`, `SiteSettings`, etc.) |
+| `src/lib/cms/payload.ts` | Payload adapter — implements interfaces using Payload's local API |
+| `src/lib/cms/sanity.ts` | Sanity adapter — implements interfaces using GROQ queries |
+| `src/lib/cms/index.ts` | Re-exports the active adapter (set during scaffolding) |
+
+## Manual Setup (Without CLI)
 
 ```bash
 # Clone the repo
@@ -30,50 +77,60 @@ bun run env:pull
 bun dev
 ```
 
-> **No 1Password?** You can manually copy the template instead: `cp .env.example .env.local` and fill in the values by hand.
+> **No 1Password?** Copy the template instead: `cp .env.example .env.local` and fill in the values by hand.
 
-Open [http://localhost:3000](http://localhost:3000) for the site, and [http://localhost:3000/admin](http://localhost:3000/admin) for the Payload admin panel.
+Open [http://localhost:3000](http://localhost:3000) for the site, and [http://localhost:3000/admin](http://localhost:3000/admin) for the Payload admin panel (or `/studio` for Sanity).
 
-On first visit to `/admin`, you'll be prompted to create your first admin user.
+On first visit to the admin, you'll be prompted to create your first user.
 
 ## Connecting Services
 
-### Neon Postgres
+### Neon Postgres (Payload only)
 1. Create a Neon project at [neon.tech](https://neon.tech)
 2. Copy the connection string into `POSTGRES_URL` in `.env.local`
 3. Or add the Neon integration in your Vercel project (auto-sets `POSTGRES_URL`)
 
-### Vercel Blob
+### Vercel Blob (Payload only)
 1. Add Blob storage in your Vercel project dashboard
 2. Copy the token into `BLOB_READ_WRITE_TOKEN` in `.env.local`
-3. Or it's auto-set when you add Blob via the Vercel dashboard
 
-### Payload Secret
+### Sanity (Sanity only)
+1. Create a Sanity project at [sanity.io](https://www.sanity.io)
+2. Set `NEXT_PUBLIC_SANITY_PROJECT_ID` and `NEXT_PUBLIC_SANITY_DATASET` in `.env.local`
+
+### Payload Secret (Payload only)
 Generate one with: `openssl rand -base64 32`
 
-## Payload CMS
+## Payload CMS Collections & Globals
 
 ### Collections
 
 | Collection | Description |
 |------------|-------------|
-| **Users** | Auth-enabled. Fields: email, name, role (admin/editor) |
+| **Blog** | Blog posts with rich text, featured images, drafts, and SEO |
+| **Pages** | Static pages with title, slug, rich text, and SEO meta |
 | **Media** | Image/PDF uploads with thumbnail, card, and desktop sizes |
-| **Pages** | Title, slug, rich text content, SEO meta group. Drafts with autosave |
+| **Redirects** | URL redirect rules |
+| **Form Submissions** | Contact form entries |
+| **Users** | Auth-enabled. Fields: email, name, role (admin/editor) |
+
+### Globals
+
+| Global | Description |
+|--------|-------------|
+| **General** | Site name, business name, contact info |
+| **Analytics** | Google Analytics ID |
+| **Social Links** | Social media profile URLs |
 
 ### Adding Collections
 
 Create a new file in `src/collections/` and add it to the `collections` array in `src/payload.config.ts`.
 
-### Generating Types
-
-After changing collections, regenerate the TypeScript types:
+After changing collections, regenerate types:
 
 ```bash
 bun run generate:types
 ```
-
-This updates `src/payload-types.ts` with types matching your collections.
 
 ## Fonts
 
@@ -145,32 +202,36 @@ src/
       globals.css       # Theme, colors, typography classes
       layout.tsx        # Root layout, font loading
       page.tsx          # Home page
-    (payload)/
-      layout.tsx        # Payload admin layout (isolated)
-      admin/            # Admin panel routes
-      api/              # REST + GraphQL API routes
-  collections/
-    Users.ts            # Auth-enabled user collection
-    Media.ts            # Image/PDF uploads
-    Pages.ts            # CMS pages with SEO meta
+    (payload)/          # Payload admin & API routes (auto-generated)
+    studio/             # Sanity Studio route (Sanity only)
+  collections/          # Payload CMS collection configs
+  globals/              # Payload CMS global configs
+  sanity/               # Sanity schemas, client, queries (Sanity only)
   components/
-    ui/                 # shadcn/ui components (add as needed)
+    payload/            # Payload admin customizations
+    ui/                 # shadcn/ui components
   lib/
+    cms/                # CMS abstraction layer
+      types.ts          # Shared content interfaces
+      payload.ts        # Payload adapter
+      sanity.ts         # Sanity adapter
+      index.ts          # Active adapter re-export
     utils.ts            # cn() class merge utility
+  hooks/                # Custom React hooks
   payload.config.ts     # Payload CMS configuration
-  payload-types.ts      # Auto-generated types
+  payload-types.ts      # Auto-generated Payload types
 ```
 
 ## Deploying to Vercel
 
 1. Push to GitHub
 2. Import project in Vercel
-3. Add integrations: **Neon Postgres** + **Blob Storage**
-4. Set `PAYLOAD_SECRET` in environment variables
+3. For Payload: Add integrations — **Neon Postgres** + **Blob Storage**, set `PAYLOAD_SECRET`
+4. For Sanity: Set `NEXT_PUBLIC_SANITY_PROJECT_ID` and `NEXT_PUBLIC_SANITY_DATASET`
 5. Set build command to `bun run ci`
 6. Deploy
 
-The `ci` script runs database migrations before building.
+The `ci` script runs database migrations before building (Payload only).
 
 ## Scripts
 
@@ -184,3 +245,11 @@ The `ci` script runs database migrations before building.
 | `bun run generate:types` | Regenerate Payload TypeScript types |
 | `bun run generate:importmap` | Regenerate admin import map |
 | `bun run ci` | Run migrations + build (Vercel build command) |
+
+## CLI Tool
+
+The `create-sitekick` CLI is published separately to npm. See [create-sitekick/README.md](create-sitekick/README.md) for full documentation.
+
+## License
+
+MIT

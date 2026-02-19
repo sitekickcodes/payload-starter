@@ -1345,6 +1345,97 @@ async function ensureAuth(toolName, checkCmd, authCmd, s) {
   R2.error(`${toolName} still not authenticated.`);
   return false;
 }
+async function selectGitHubOrg() {
+  const output = run('gh api /user/orgs --jq ".[].login"');
+  if (!output)
+    return null;
+  const orgs = output.split(`
+`).filter(Boolean);
+  if (orgs.length === 0)
+    return null;
+  const selected = await Je({
+    message: "Which GitHub account?",
+    options: [
+      { value: "__personal__", label: "Personal account" },
+      ...orgs.map((org) => ({ value: org, label: org }))
+    ]
+  });
+  if (Ct(selected)) {
+    Ne("Cancelled.");
+    process.exit(0);
+  }
+  return selected === "__personal__" ? null : selected;
+}
+async function selectVercelTeam() {
+  const output = run("vercel team ls 2>/dev/null");
+  if (!output)
+    return null;
+  const teams = [];
+  for (const line of output.split(`
+`)) {
+    const match = line.match(/[●○]\s+(\S+)\s*(?:\((.+?)\))?/);
+    if (match) {
+      teams.push({ slug: match[1], name: match[2] || match[1] });
+    }
+  }
+  if (teams.length === 0) {
+    for (const line of output.split(`
+`)) {
+      const trimmed = line.trim();
+      if (!trimmed || /^(id|name|slug|─|>|\d+ teams?)/i.test(trimmed))
+        continue;
+      const parts = trimmed.split(/\s{2,}/);
+      if (parts.length >= 1 && /^[a-z0-9][\w-]*$/.test(parts[0])) {
+        teams.push({ slug: parts[0], name: parts[1] || parts[0] });
+      }
+    }
+  }
+  if (teams.length === 0)
+    return null;
+  const selected = await Je({
+    message: "Which Vercel account?",
+    options: [
+      { value: "__personal__", label: "Personal account" },
+      ...teams.map((t) => ({
+        value: t.slug,
+        label: t.name !== t.slug ? `${t.name} (${t.slug})` : t.slug
+      }))
+    ]
+  });
+  if (Ct(selected)) {
+    Ne("Cancelled.");
+    process.exit(0);
+  }
+  return selected === "__personal__" ? null : selected;
+}
+async function selectNeonOrg() {
+  const output = run("neonctl orgs list --output json 2>/dev/null");
+  if (!output)
+    return null;
+  try {
+    const data = JSON.parse(output);
+    const orgs = Array.isArray(data) ? data : data.orgs || data.organizations || [];
+    if (orgs.length === 0)
+      return null;
+    const selected = await Je({
+      message: "Which Neon organization?",
+      options: [
+        { value: "__personal__", label: "Personal account" },
+        ...orgs.map((org) => ({
+          value: org.id || org.org_id,
+          label: org.name || org.id
+        }))
+      ]
+    });
+    if (Ct(selected)) {
+      Ne("Cancelled.");
+      process.exit(0);
+    }
+    return selected === "__personal__" ? null : selected;
+  } catch {
+    return null;
+  }
+}
 async function setupGitHub(projectName, targetDir, s) {
   if (!await ensureTool("gh", s))
     return null;
@@ -1382,6 +1473,7 @@ async function setupGitHub(projectName, targetDir, s) {
     s.stop("Linked to existing repo");
     return repoUrl2;
   }
+  const ghOrg = await selectGitHubOrg();
   const visibility = await Je({
     message: "Repository visibility:",
     options: [
@@ -1393,13 +1485,14 @@ async function setupGitHub(projectName, targetDir, s) {
     Ne("Cancelled.");
     process.exit(0);
   }
-  s.start(`Creating GitHub repo ${import_picocolors3.default.cyan(projectName)}...`);
-  const result = run(`gh repo create ${projectName} --${visibility} --source . --remote origin`, { cwd: targetDir });
+  const repoFullName = ghOrg ? `${ghOrg}/${projectName}` : projectName;
+  s.start(`Creating GitHub repo ${import_picocolors3.default.cyan(repoFullName)}...`);
+  const result = run(`gh repo create ${repoFullName} --${visibility} --source . --remote origin`, { cwd: targetDir });
   if (result === null) {
     s.stop("Failed to create GitHub repo");
     return null;
   }
-  s.stop(`GitHub repo created: ${import_picocolors3.default.cyan(projectName)}`);
+  s.stop(`GitHub repo created: ${import_picocolors3.default.cyan(repoFullName)}`);
   const repoUrl = run("gh repo view --json url -q .url", { cwd: targetDir });
   return repoUrl;
 }
@@ -1439,10 +1532,13 @@ async function setupNeon(projectName, s) {
     }
     return connStr;
   }
+  const neonOrgId = await selectNeonOrg();
   s.start(`Creating Neon database ${import_picocolors3.default.cyan(projectName)}...`);
-  const output = run(`neonctl projects create --name ${projectName} --output json`);
+  const orgFlag = neonOrgId ? ` --org-id ${neonOrgId}` : "";
+  const output = run(`neonctl projects create --name ${projectName}${orgFlag} --output json`);
   if (!output) {
     s.stop("Failed to create Neon database");
+    R2.warn("Try creating a Neon project manually at https://console.neon.tech");
     return null;
   }
   try {
@@ -1454,18 +1550,22 @@ async function setupNeon(projectName, s) {
     }
     const projectId = data.project?.id || data.id;
     if (projectId) {
-      s.stop(`Neon project created: ${import_picocolors3.default.cyan(projectName)}`);
-      const csOutput = run(`neonctl connection-string ${projectId} --output json`);
-      if (csOutput) {
-        const csData = JSON.parse(csOutput);
-        return csData.connection_string || csData.connection_uri || null;
+      const csOutput = run(`neonctl connection-string ${projectId}${orgFlag}`);
+      if (csOutput && csOutput.startsWith("postgres")) {
+        s.stop(`Neon database created: ${import_picocolors3.default.cyan(projectName)}`);
+        return csOutput;
       }
     }
-    s.stop("Neon database created but couldn't get connection string");
-    R2.warn("Run `neonctl connection-string` to get your POSTGRES_URL");
+    s.stop("Neon project created but couldn't get connection string");
+    R2.warn(`Get your connection string from https://console.neon.tech or run:
+` + "  neonctl connection-string");
     return null;
   } catch {
-    s.stop("Neon database created but couldn't parse output");
+    if (output.startsWith("postgres")) {
+      s.stop(`Neon database created: ${import_picocolors3.default.cyan(projectName)}`);
+      return output;
+    }
+    s.stop("Neon project created but couldn't parse output");
     R2.info(`Raw output: ${output}`);
     return null;
   }
@@ -1536,9 +1636,9 @@ async function setupSanityProject(projectName, s) {
 }
 async function setupVercel(projectName, targetDir, repoUrl, s) {
   if (!await ensureTool("vercel", s))
-    return null;
+    return { url: null, scope: null };
   if (!await ensureAuth("Vercel", "vercel whoami", "vercel login", s))
-    return null;
+    return { url: null, scope: null };
   const existing = await Je({
     message: "Vercel project:",
     options: [
@@ -1552,45 +1652,54 @@ async function setupVercel(projectName, targetDir, repoUrl, s) {
     process.exit(0);
   }
   if (existing === "skip")
-    return null;
+    return { url: null, scope: null };
+  const vercelTeam = await selectVercelTeam();
+  const scopeFlag = vercelTeam ? ` --scope ${vercelTeam}` : "";
   if (existing === "existing") {
     s.start("Linking to existing Vercel project...");
     try {
-      runInteractive(`vercel link --yes`, { cwd: targetDir });
+      runInteractive(`vercel link --yes${scopeFlag}`, { cwd: targetDir });
       s.stop("Linked to Vercel project");
     } catch {
       s.stop("Failed to link Vercel project");
-      return null;
+      return { url: null, scope: vercelTeam };
     }
-    return `https://${projectName}.vercel.app`;
+    return { url: `https://${projectName}.vercel.app`, scope: vercelTeam };
   }
   s.start(`Creating Vercel project ${import_picocolors3.default.cyan(projectName)}...`);
-  const result = run(`vercel link --yes --project ${projectName}`, { cwd: targetDir });
+  const result = run(`vercel link --yes --project ${projectName}${scopeFlag}`, { cwd: targetDir });
   if (result === null) {
-    run(`vercel project add ${projectName}`, { cwd: targetDir });
-    run(`vercel link --yes --project ${projectName}`, { cwd: targetDir });
+    run(`vercel project add ${projectName}${scopeFlag}`, { cwd: targetDir });
+    run(`vercel link --yes --project ${projectName}${scopeFlag}`, { cwd: targetDir });
   }
   s.stop(`Vercel project created: ${import_picocolors3.default.cyan(projectName)}`);
   if (repoUrl) {
     s.start("Connecting Vercel to GitHub for auto-deploy...");
-    const connected = run("vercel git connect --yes", { cwd: targetDir });
+    const connected = run(`vercel git connect --yes${scopeFlag}`, { cwd: targetDir });
     if (connected !== null) {
       s.stop("Vercel connected to GitHub — pushes will auto-deploy");
     } else {
       s.stop("Could not auto-connect — link GitHub in the Vercel dashboard");
     }
   }
-  return `https://${projectName}.vercel.app`;
+  return { url: `https://${projectName}.vercel.app`, scope: vercelTeam };
 }
-async function pushEnvToVercel(envVars, targetDir, s) {
+async function pushEnvToVercel(envVars, targetDir, scope, s) {
   s.start("Pushing environment variables to Vercel...");
+  const scopeFlag = scope ? ` --scope ${scope}` : "";
   let pushed = 0;
   for (const [key, value] of Object.entries(envVars)) {
     if (!value)
       continue;
-    const result = run(`echo "${value}" | vercel env add ${key} production preview development --yes`, { cwd: targetDir });
-    if (result !== null)
+    try {
+      execSync(`vercel env add ${key} production preview development --yes${scopeFlag}`, {
+        input: value + `
+`,
+        cwd: targetDir,
+        stdio: ["pipe", "pipe", "pipe"]
+      });
       pushed++;
+    } catch {}
   }
   s.stop(`Pushed ${pushed} env var(s) to Vercel`);
 }
@@ -1823,7 +1932,7 @@ async function main() {
     }
   }
   R2.step(import_picocolors3.default.bold("Vercel"));
-  const deployUrl = await setupVercel(projectName, targetDir, repoUrl, s);
+  const { url: deployUrl, scope: vercelScope } = await setupVercel(projectName, targetDir, repoUrl, s);
   if (deployUrl) {
     envVars.NEXT_PUBLIC_SITE_URL = deployUrl;
   }
@@ -1837,7 +1946,7 @@ async function main() {
   if (deployUrl && Object.keys(envVars).length > 0) {
     const shouldPush = await cancelOrContinue("Push environment variables to Vercel?");
     if (shouldPush) {
-      await pushEnvToVercel(envVars, targetDir, s);
+      await pushEnvToVercel(envVars, targetDir, vercelScope, s);
     }
   }
   run("git add .env.example", { cwd: targetDir });

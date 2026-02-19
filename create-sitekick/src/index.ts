@@ -173,6 +173,93 @@ async function ensureAuth(
   return false;
 }
 
+// ─── Org/team selection helpers ─────────────────────────────────────────────
+
+async function selectGitHubOrg(): Promise<string | null> {
+  const output = run('gh api /user/orgs --jq ".[].login"');
+  if (!output) return null;
+
+  const orgs = output.split("\n").filter(Boolean);
+  if (orgs.length === 0) return null;
+
+  const selected = await p.select({
+    message: "Which GitHub account?",
+    options: [
+      { value: "__personal__", label: "Personal account" },
+      ...orgs.map((org) => ({ value: org, label: org })),
+    ],
+  });
+  if (p.isCancel(selected)) { p.cancel("Cancelled."); process.exit(0); }
+  return selected === "__personal__" ? null : (selected as string);
+}
+
+async function selectVercelTeam(): Promise<string | null> {
+  const output = run("vercel team ls 2>/dev/null");
+  if (!output) return null;
+
+  // Extract team slugs — try bullet format "● slug (Name)" and table format
+  const teams: { slug: string; name: string }[] = [];
+  for (const line of output.split("\n")) {
+    const match = line.match(/[●○]\s+(\S+)\s*(?:\((.+?)\))?/);
+    if (match) {
+      teams.push({ slug: match[1], name: match[2] || match[1] });
+    }
+  }
+
+  // Fallback: try table format
+  if (teams.length === 0) {
+    for (const line of output.split("\n")) {
+      const trimmed = line.trim();
+      if (!trimmed || /^(id|name|slug|─|>|\d+ teams?)/i.test(trimmed)) continue;
+      const parts = trimmed.split(/\s{2,}/);
+      if (parts.length >= 1 && /^[a-z0-9][\w-]*$/.test(parts[0])) {
+        teams.push({ slug: parts[0], name: parts[1] || parts[0] });
+      }
+    }
+  }
+
+  if (teams.length === 0) return null;
+
+  const selected = await p.select({
+    message: "Which Vercel account?",
+    options: [
+      { value: "__personal__", label: "Personal account" },
+      ...teams.map((t) => ({
+        value: t.slug,
+        label: t.name !== t.slug ? `${t.name} (${t.slug})` : t.slug,
+      })),
+    ],
+  });
+  if (p.isCancel(selected)) { p.cancel("Cancelled."); process.exit(0); }
+  return selected === "__personal__" ? null : (selected as string);
+}
+
+async function selectNeonOrg(): Promise<string | null> {
+  const output = run("neonctl orgs list --output json 2>/dev/null");
+  if (!output) return null;
+
+  try {
+    const data = JSON.parse(output);
+    const orgs = Array.isArray(data) ? data : data.orgs || data.organizations || [];
+    if (orgs.length === 0) return null;
+
+    const selected = await p.select({
+      message: "Which Neon organization?",
+      options: [
+        { value: "__personal__", label: "Personal account" },
+        ...orgs.map((org: any) => ({
+          value: org.id || org.org_id,
+          label: org.name || org.id,
+        })),
+      ],
+    });
+    if (p.isCancel(selected)) { p.cancel("Cancelled."); process.exit(0); }
+    return selected === "__personal__" ? null : (selected as string);
+  } catch {
+    return null;
+  }
+}
+
 // ─── Service setup functions ─────────────────────────────────────────────────
 
 async function setupGitHub(
@@ -210,7 +297,9 @@ async function setupGitHub(
     return repoUrl as string;
   }
 
-  // Create new repo
+  // Create new repo — ask for org first
+  const ghOrg = await selectGitHubOrg();
+
   const visibility = await p.select({
     message: "Repository visibility:",
     options: [
@@ -220,16 +309,17 @@ async function setupGitHub(
   });
   if (p.isCancel(visibility)) { p.cancel("Cancelled."); process.exit(0); }
 
-  s.start(`Creating GitHub repo ${pc.cyan(projectName)}...`);
+  const repoFullName = ghOrg ? `${ghOrg}/${projectName}` : projectName;
+  s.start(`Creating GitHub repo ${pc.cyan(repoFullName)}...`);
   const result = run(
-    `gh repo create ${projectName} --${visibility} --source . --remote origin`,
+    `gh repo create ${repoFullName} --${visibility} --source . --remote origin`,
     { cwd: targetDir },
   );
   if (result === null) {
     s.stop("Failed to create GitHub repo");
     return null;
   }
-  s.stop(`GitHub repo created: ${pc.cyan(projectName)}`);
+  s.stop(`GitHub repo created: ${pc.cyan(repoFullName)}`);
 
   // Get the repo URL
   const repoUrl = run("gh repo view --json url -q .url", { cwd: targetDir });
@@ -268,18 +358,25 @@ async function setupNeon(
     return connStr as string;
   }
 
+  // Ask for org
+  const neonOrgId = await selectNeonOrg();
+
   // Create new project
   s.start(`Creating Neon database ${pc.cyan(projectName)}...`);
+  const orgFlag = neonOrgId ? ` --org-id ${neonOrgId}` : "";
   const output = run(
-    `neonctl projects create --name ${projectName} --output json`,
+    `neonctl projects create --name ${projectName}${orgFlag} --output json`,
   );
   if (!output) {
     s.stop("Failed to create Neon database");
+    p.log.warn("Try creating a Neon project manually at https://console.neon.tech");
     return null;
   }
 
   try {
     const data = JSON.parse(output);
+
+    // Try to get connection string directly from creation output
     const connStr =
       data.connection_uris?.[0]?.connection_uri ||
       data.connection_uri ||
@@ -288,24 +385,32 @@ async function setupNeon(
       s.stop(`Neon database created: ${pc.cyan(projectName)}`);
       return connStr;
     }
-    // If JSON structure is different, try to extract from project info
+
+    // Fall back to getting project ID and fetching connection string separately
     const projectId = data.project?.id || data.id;
     if (projectId) {
-      s.stop(`Neon project created: ${pc.cyan(projectName)}`);
-      // Get connection string from project
       const csOutput = run(
-        `neonctl connection-string ${projectId} --output json`,
+        `neonctl connection-string ${projectId}${orgFlag}`,
       );
-      if (csOutput) {
-        const csData = JSON.parse(csOutput);
-        return csData.connection_string || csData.connection_uri || null;
+      if (csOutput && csOutput.startsWith("postgres")) {
+        s.stop(`Neon database created: ${pc.cyan(projectName)}`);
+        return csOutput;
       }
     }
-    s.stop("Neon database created but couldn't get connection string");
-    p.log.warn("Run `neonctl connection-string` to get your POSTGRES_URL");
+
+    s.stop("Neon project created but couldn't get connection string");
+    p.log.warn(
+      "Get your connection string from https://console.neon.tech or run:\n" +
+        "  neonctl connection-string",
+    );
     return null;
   } catch {
-    s.stop("Neon database created but couldn't parse output");
+    // The output might not be JSON — could be the connection string itself
+    if (output.startsWith("postgres")) {
+      s.stop(`Neon database created: ${pc.cyan(projectName)}`);
+      return output;
+    }
+    s.stop("Neon project created but couldn't parse output");
     p.log.info(`Raw output: ${output}`);
     return null;
   }
@@ -383,9 +488,10 @@ async function setupVercel(
   targetDir: string,
   repoUrl: string | null,
   s: ReturnType<typeof p.spinner>,
-): Promise<string | null> {
-  if (!(await ensureTool("vercel", s))) return null;
-  if (!(await ensureAuth("Vercel", "vercel whoami", "vercel login", s))) return null;
+): Promise<{ url: string | null; scope: string | null }> {
+  if (!(await ensureTool("vercel", s))) return { url: null, scope: null };
+  if (!(await ensureAuth("Vercel", "vercel whoami", "vercel login", s)))
+    return { url: null, scope: null };
 
   const existing = await p.select({
     message: "Vercel project:",
@@ -397,18 +503,22 @@ async function setupVercel(
   });
   if (p.isCancel(existing)) { p.cancel("Cancelled."); process.exit(0); }
 
-  if (existing === "skip") return null;
+  if (existing === "skip") return { url: null, scope: null };
+
+  // Ask for team selection
+  const vercelTeam = await selectVercelTeam();
+  const scopeFlag = vercelTeam ? ` --scope ${vercelTeam}` : "";
 
   if (existing === "existing") {
     s.start("Linking to existing Vercel project...");
     try {
-      runInteractive(`vercel link --yes`, { cwd: targetDir });
+      runInteractive(`vercel link --yes${scopeFlag}`, { cwd: targetDir });
       s.stop("Linked to Vercel project");
     } catch {
       s.stop("Failed to link Vercel project");
-      return null;
+      return { url: null, scope: vercelTeam };
     }
-    return `https://${projectName}.vercel.app`;
+    return { url: `https://${projectName}.vercel.app`, scope: vercelTeam };
   }
 
   // Create new project
@@ -416,20 +526,20 @@ async function setupVercel(
 
   // Use vercel link to create/connect the project
   const result = run(
-    `vercel link --yes --project ${projectName}`,
+    `vercel link --yes --project ${projectName}${scopeFlag}`,
     { cwd: targetDir },
   );
   if (result === null) {
     // vercel link might fail if project doesn't exist — create it first
-    run(`vercel project add ${projectName}`, { cwd: targetDir });
-    run(`vercel link --yes --project ${projectName}`, { cwd: targetDir });
+    run(`vercel project add ${projectName}${scopeFlag}`, { cwd: targetDir });
+    run(`vercel link --yes --project ${projectName}${scopeFlag}`, { cwd: targetDir });
   }
   s.stop(`Vercel project created: ${pc.cyan(projectName)}`);
 
   // Connect GitHub repo for auto-deploy
   if (repoUrl) {
     s.start("Connecting Vercel to GitHub for auto-deploy...");
-    const connected = run("vercel git connect --yes", { cwd: targetDir });
+    const connected = run(`vercel git connect --yes${scopeFlag}`, { cwd: targetDir });
     if (connected !== null) {
       s.stop("Vercel connected to GitHub — pushes will auto-deploy");
     } else {
@@ -437,24 +547,34 @@ async function setupVercel(
     }
   }
 
-  return `https://${projectName}.vercel.app`;
+  return { url: `https://${projectName}.vercel.app`, scope: vercelTeam };
 }
 
 async function pushEnvToVercel(
   envVars: Record<string, string>,
   targetDir: string,
+  scope: string | null,
   s: ReturnType<typeof p.spinner>,
 ) {
   s.start("Pushing environment variables to Vercel...");
+  const scopeFlag = scope ? ` --scope ${scope}` : "";
   let pushed = 0;
   for (const [key, value] of Object.entries(envVars)) {
     if (!value) continue;
-    // Write to all environments: production, preview, development
-    const result = run(
-      `echo "${value}" | vercel env add ${key} production preview development --yes`,
-      { cwd: targetDir },
-    );
-    if (result !== null) pushed++;
+    try {
+      // Use execSync with input option to pipe value via stdin
+      execSync(
+        `vercel env add ${key} production preview development --yes${scopeFlag}`,
+        {
+          input: value + "\n",
+          cwd: targetDir,
+          stdio: ["pipe", "pipe", "pipe"],
+        },
+      );
+      pushed++;
+    } catch {
+      // Some env vars may fail (e.g. already exist) — continue
+    }
   }
   s.stop(`Pushed ${pushed} env var(s) to Vercel`);
 }
@@ -781,7 +901,7 @@ async function main() {
   // ─── Vercel setup ────────────────────────────────────────────────────────
 
   p.log.step(pc.bold("Vercel"));
-  const deployUrl = await setupVercel(projectName, targetDir, repoUrl, s);
+  const { url: deployUrl, scope: vercelScope } = await setupVercel(projectName, targetDir, repoUrl, s);
   if (deployUrl) {
     envVars.NEXT_PUBLIC_SITE_URL = deployUrl;
   }
@@ -805,7 +925,7 @@ async function main() {
       "Push environment variables to Vercel?",
     );
     if (shouldPush) {
-      await pushEnvToVercel(envVars, targetDir, s);
+      await pushEnvToVercel(envVars, targetDir, vercelScope, s);
     }
   }
 
