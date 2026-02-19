@@ -1,6 +1,6 @@
 {
   "name": "create-sitekick",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "Scaffold a new Sitekick project with your choice of CMS",
   "type": "module",
   "bin": {
