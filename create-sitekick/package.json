@@ -1,6 +1,9 @@
 {
-  "name": "create-sitekick",
-  "version": "0.2.3",
+  "name": "@sitekick/create-sitekick",
+  "version": "0.3.0",
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com"
+  },
   "description": "Scaffold a new Sitekick project with your choice of CMS",
   "type": "module",
   "bin": {

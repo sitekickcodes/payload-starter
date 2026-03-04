@@ -1685,6 +1685,10 @@ async function setupVercel(projectName, targetDir, repoUrl, s) {
     run(`vercel link --yes --project ${projectName}${scopeFlag}`, { cwd: targetDir });
   }
   s.stop(`Vercel project created: ${import_picocolors3.default.cyan(projectName)}`);
+  try {
+    execSync(`vercel env add NODE_VERSION production preview development --yes${scopeFlag}`, { input: `22.x
+`, cwd: targetDir, stdio: ["pipe", "pipe", "pipe"] });
+  } catch {}
   if (repoUrl) {
     s.start("Connecting Vercel to GitHub for auto-deploy...");
     const connected = run(`vercel git connect --yes${scopeFlag}`, { cwd: targetDir });
@@ -1711,7 +1715,13 @@ async function pushEnvToVercel(envVars, targetDir, scope, s) {
         stdio: ["pipe", "pipe", "pipe"]
       });
       pushed++;
-    } catch {}
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (msg.includes("already exists"))
+        continue;
+      R2.warn(`Failed to push ${key}: ${msg.split(`
+`)[0]}`);
+    }
   }
   s.stop(`Pushed ${pushed} env var(s) to Vercel`);
 }
@@ -1949,7 +1959,8 @@ async function main() {
   s.start("Writing environment files...");
   writeEnvFile(targetDir, cms, envVars);
   s.stop("Environment files written");
-  if (deployUrl && Object.keys(envVars).length > 0) {
+  const isVercelLinked = fs.existsSync(path.join(targetDir, ".vercel"));
+  if (isVercelLinked && Object.keys(envVars).length > 0) {
     const shouldPush = await cancelOrContinue("Push environment variables to Vercel?");
     if (shouldPush) {
       await pushEnvToVercel(envVars, targetDir, vercelScope, s);

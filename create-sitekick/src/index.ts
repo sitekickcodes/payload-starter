@@ -586,6 +586,14 @@ async function setupVercel(
   }
   s.stop(`Vercel project created: ${pc.cyan(projectName)}`);
 
+  // Pin Node.js version to 22.x LTS
+  try {
+    execSync(
+      `vercel env add NODE_VERSION production preview development --yes${scopeFlag}`,
+      { input: "22.x\n", cwd: targetDir, stdio: ["pipe", "pipe", "pipe"] },
+    );
+  } catch { /* may already exist */ }
+
   // Connect GitHub repo for auto-deploy
   if (repoUrl) {
     s.start("Connecting Vercel to GitHub for auto-deploy...");
@@ -622,8 +630,10 @@ async function pushEnvToVercel(
         },
       );
       pushed++;
-    } catch {
-      // Some env vars may fail (e.g. already exist) — continue
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (msg.includes("already exists")) continue;
+      p.log.warn(`Failed to push ${key}: ${msg.split("\n")[0]}`);
     }
   }
   s.stop(`Pushed ${pushed} env var(s) to Vercel`);
@@ -969,7 +979,8 @@ async function main() {
 
   // ─── Push env vars to Vercel ─────────────────────────────────────────────
 
-  if (deployUrl && Object.keys(envVars).length > 0) {
+  const isVercelLinked = fs.existsSync(path.join(targetDir, ".vercel"));
+  if (isVercelLinked && Object.keys(envVars).length > 0) {
     const shouldPush = await cancelOrContinue(
       "Push environment variables to Vercel?",
     );

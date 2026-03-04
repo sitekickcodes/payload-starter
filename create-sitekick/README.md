@@ -1,17 +1,25 @@
-# create-sitekick
+# @sitekick/create-sitekick
 
 Scaffold a production-ready Next.js site with your choice of CMS in one command. Built by [Sitekick](https://github.com/sitekickcodes).
 
 ## Quick Start
 
+First, configure the GitHub Packages registry for the `@sitekick` scope (one-time setup):
+
 ```bash
-bun create sitekick my-site
+echo "@sitekick:registry=https://npm.pkg.github.com" >> ~/.npmrc
 ```
 
-Or with npx:
+Then run:
 
 ```bash
-npx create-sitekick my-site
+npx @sitekick/create-sitekick my-site
+```
+
+Or with bunx:
+
+```bash
+bunx @sitekick/create-sitekick my-site
 ```
 
 ## What You Get
@@ -53,7 +61,7 @@ Hosted CMS with Sanity Studio embedded at `/studio`.
 The CLI walks you through setting up everything you need:
 
 ```
-$ bun create sitekick my-site
+$ npx @sitekick/create-sitekick my-site
 
 ┌  create-sitekick
 │
@@ -190,14 +198,13 @@ Optional (the CLI will prompt to install these):
 
 ## Updating
 
-To publish a new version after making changes to the starter:
+To publish a new version, bump the version in `package.json`, commit, and push a tag:
 
 ```bash
-cd create-sitekick
-bun run build
-# bump version in package.json
-npm publish
+git tag v0.3.1 && git push --tags
 ```
+
+The GitHub Action will build and publish to GitHub Packages automatically.
 
 ## License
 
