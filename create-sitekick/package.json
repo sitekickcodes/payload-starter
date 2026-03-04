@@ -1,6 +1,6 @@
 {
-  "name": "@sitekick/create-sitekick",
-  "version": "0.3.0",
+  "name": "@sitekickcodes/create-sitekick",
+  "version": "0.3.1",
   "publishConfig": {
     "registry": "https://npm.pkg.github.com"
   },
