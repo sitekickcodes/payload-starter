@@ -1,4 +1,4 @@
-# @sitekickcodes/create-sitekick
+# @sitekickcodes/create-website
 
 Scaffold a production-ready Next.js site with your choice of CMS in one command. Built by [Sitekick](https://github.com/sitekickcodes).
 
@@ -13,13 +13,13 @@ echo "@sitekickcodes:registry=https://npm.pkg.github.com" >> ~/.npmrc
 Then run:
 
 ```bash
-npx @sitekickcodes/create-sitekick my-site
+npx @sitekickcodes/create-website my-site
 ```
 
 Or with bunx:
 
 ```bash
-bunx @sitekickcodes/create-sitekick my-site
+bunx @sitekickcodes/create-website my-site
 ```
 
 ## What You Get
@@ -61,7 +61,7 @@ Hosted CMS with Sanity Studio embedded at `/studio`.
 The CLI walks you through setting up everything you need:
 
 ```
-$ npx @sitekickcodes/create-sitekick my-site
+$ npx @sitekickcodes/create-website my-site
 
 ┌  create-sitekick
 │
