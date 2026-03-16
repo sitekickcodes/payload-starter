@@ -32,5 +32,5 @@
     ".next/dev/types/**/*.ts",
     "**/*.mts"
   ],
-  "exclude": ["node_modules", "create-sitekick"]
+  "exclude": ["node_modules", "create-website"]
 }

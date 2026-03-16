@@ -1,17 +1,17 @@
-# Sitekick Starter
+# Sitekick Website Starter
 
 The foundation for every Sitekick project. A pre-configured Next.js starter with your choice of CMS, a shared typography system, component library, and deployment config baked in so the team can skip setup and start building.
 
 ## Quick Start
 
 ```bash
-bun create sitekick my-site
+npx @sitekickcodes/create-website my-site
 ```
 
-Or with npx:
+Or with bunx:
 
 ```bash
-npx create-sitekick my-site
+bunx @sitekickcodes/create-website my-site
 ```
 
 The CLI walks you through choosing a CMS, provisioning services (GitHub, database, Vercel), and pushing your first deploy.
@@ -64,8 +64,8 @@ This works identically whether Payload or Sanity is powering the backend. The ad
 
 ```bash
 # Clone the repo
-git clone https://github.com/sitekickcodes/sitekick-starter.git
-cd sitekick-starter
+git clone https://github.com/sitekickcodes/website-starter.git
+cd website-starter
 
 # Install dependencies
 bun install
@@ -248,7 +248,7 @@ The `ci` script runs database migrations before building (Payload only).
 
 ## CLI Tool
 
-The `create-sitekick` CLI is published separately to npm. See [create-sitekick/README.md](create-sitekick/README.md) for full documentation.
+The CLI tool is published separately as `@sitekickcodes/create-website`. See [create-website/README.md](create-website/README.md) for full documentation.
 
 ## License
 

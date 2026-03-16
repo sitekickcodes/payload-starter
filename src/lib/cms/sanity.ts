@@ -1,7 +1,5 @@
 import { client } from "@/sanity/client";
 import {
-  BLOG_POSTS_QUERY,
-  BLOG_POST_QUERY,
   PAGE_QUERY,
   SITE_SETTINGS_QUERY,
   ANALYTICS_QUERY,
@@ -10,7 +8,6 @@ import {
 import type {
   CMSAdapter,
   CMSImage,
-  BlogPost,
   Page,
   SiteSettings,
   AnalyticsSettings,
@@ -30,40 +27,6 @@ function toImage(
 }
 
 export const sanityAdapter: CMSAdapter = {
-  async getBlogPosts() {
-    const docs = await client.fetch(BLOG_POSTS_QUERY);
-    if (!docs) return [];
-
-    return docs.map((doc: Record<string, unknown>): BlogPost => ({
-      id: doc._id as string,
-      title: doc.title as string,
-      slug: doc.slug as string,
-      content: doc.content,
-      featuredImage: toImage(doc.featuredImage as Parameters<typeof toImage>[0]),
-      status: (doc.status as "draft" | "published") || "draft",
-      publishedAt: (doc.publishedAt as string) || undefined,
-      updatedAt: doc._updatedAt as string,
-      createdAt: doc._createdAt as string,
-    }));
-  },
-
-  async getBlogPost(slug: string) {
-    const doc = await client.fetch(BLOG_POST_QUERY, { slug });
-    if (!doc) return null;
-
-    return {
-      id: doc._id as string,
-      title: doc.title as string,
-      slug: doc.slug as string,
-      content: doc.content,
-      featuredImage: toImage(doc.featuredImage as Parameters<typeof toImage>[0]),
-      status: (doc.status as "draft" | "published") || "draft",
-      publishedAt: (doc.publishedAt as string) || undefined,
-      updatedAt: doc._updatedAt as string,
-      createdAt: doc._createdAt as string,
-    };
-  },
-
   async getPage(path: string) {
     const doc = await client.fetch(PAGE_QUERY, { path });
     if (!doc) return null;
@@ -116,6 +79,7 @@ export const sanityAdapter: CMSAdapter = {
       instagram: (doc?.instagram as string) || undefined,
       facebook: (doc?.facebook as string) || undefined,
       x: (doc?.x as string) || undefined,
+      google: (doc?.google as string) || undefined,
       linkedin: (doc?.linkedin as string) || undefined,
       youtube: (doc?.youtube as string) || undefined,
       tiktok: (doc?.tiktok as string) || undefined,

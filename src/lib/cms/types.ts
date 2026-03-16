@@ -10,19 +10,8 @@ export interface CMSImage {
   alt?: string;
   width?: number;
   height?: number;
-}
-
-export interface BlogPost {
-  id: string;
-  title: string;
-  slug: string;
-  /** Rich text content — render with the CMS-specific RichText component */
-  content: unknown;
-  featuredImage?: CMSImage;
-  status: "draft" | "published";
-  publishedAt?: string;
-  updatedAt: string;
-  createdAt: string;
+  focalX?: number;
+  focalY?: number;
 }
 
 export interface Page {
@@ -36,6 +25,7 @@ export interface Page {
 export interface SiteSettings {
   siteName: string;
   siteDescription?: string;
+  favicon?: CMSImage;
   ogImage?: CMSImage;
   contact?: {
     businessName?: string;
@@ -60,6 +50,7 @@ export interface SocialLinks {
   instagram?: string;
   facebook?: string;
   x?: string;
+  google?: string;
   linkedin?: string;
   youtube?: string;
   tiktok?: string;
@@ -67,8 +58,6 @@ export interface SocialLinks {
 
 /** The CMS adapter interface that each implementation must satisfy. */
 export interface CMSAdapter {
-  getBlogPosts(): Promise<BlogPost[]>;
-  getBlogPost(slug: string): Promise<BlogPost | null>;
   getPage(path: string): Promise<Page | null>;
   getSiteSettings(): Promise<SiteSettings>;
   getAnalytics(): Promise<AnalyticsSettings>;

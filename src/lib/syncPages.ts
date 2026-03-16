@@ -26,7 +26,10 @@ export async function syncPages(payload: Payload) {
   for (const route of toCreate) {
     await payload.create({
       collection: "pages",
-      data: { path: route },
+      data: {
+        path: route,
+        displayName: route === "/" ? "Home" : undefined,
+      },
       overrideAccess: true,
     });
     payload.logger.info(`[syncPages] Created page: ${route}`);

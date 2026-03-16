@@ -1,57 +1,154 @@
 import type { CollectionConfig } from "payload";
 
+const isHomepage = (data: Record<string, unknown> | undefined) =>
+  data?.path === "/";
+
 export const Pages: CollectionConfig = {
   slug: "pages",
   admin: {
-    group: "Content",
-    useAsTitle: "path",
-    defaultColumns: ["path", "metaTitle", "updatedAt"],
+    group: "SEO",
+    useAsTitle: "displayName",
+    defaultColumns: ["displayName", "path", "updatedAt"],
     description:
-      "SEO metadata for each page on the site. Pages are auto-discovered from the codebase.",
+      "Manage how each page appears in search engines and social media.",
+    pagination: { defaultLimit: 50 },
   },
+  defaultSort: "sortOrder",
   access: {
     read: () => true,
     create: () => false,
     delete: () => false,
   },
+  hooks: {
+    afterRead: [
+      async ({ doc, req }) => {
+        // Ensure displayName is always set for the list view
+        if (doc.path === "/") {
+          const siteSettings = await req.payload.findGlobal({
+            slug: "site-settings",
+          });
+          return {
+            ...doc,
+            displayName: "Home",
+            metaTitle: siteSettings.siteName || doc.metaTitle,
+            metaDescription:
+              siteSettings.siteDescription || doc.metaDescription,
+            ogImage: siteSettings.ogImage || doc.ogImage,
+          };
+        }
+        return {
+          ...doc,
+          displayName: doc.displayName || doc.metaTitle,
+        };
+      },
+    ],
+    beforeChange: [
+      async ({ data, req }) => {
+        // Set displayName for all pages
+        if (data.path === "/") {
+          data.displayName = "Home";
+        } else {
+          data.displayName = data.metaTitle;
+        }
+
+        if (data.path !== "/") return data;
+
+        // Sync homepage fields from site settings
+        const siteSettings = await req.payload.findGlobal({
+          slug: "site-settings",
+        });
+        return {
+          ...data,
+          metaTitle: siteSettings.siteName || data.metaTitle,
+          metaDescription: siteSettings.siteDescription || data.metaDescription,
+          ogImage:
+            (typeof siteSettings.ogImage === "object"
+              ? siteSettings.ogImage?.id
+              : siteSettings.ogImage) || data.ogImage,
+        };
+      },
+    ],
+  },
   fields: [
     {
+      name: "displayName",
+      type: "text",
+      admin: { hidden: true },
+    },
+    {
       name: "path",
+      label: "Page URL",
       type: "text",
       required: true,
       unique: true,
       index: true,
+      admin: { readOnly: true },
+    },
+    // Homepage notice
+    {
+      type: "ui",
+      name: "homepageNotice",
+      label: " ",
       admin: {
-        readOnly: true,
-        description: "The URL path of this page. Auto-detected from the codebase.",
+        condition: (data) => isHomepage(data),
+        components: {
+          Field: "@/components/payload/homepage-notice#HomepageNotice",
+        },
       },
     },
     {
       name: "metaTitle",
-      label: "Meta Title",
+      label: "Page Title",
       type: "text",
+      required: true,
       admin: {
         description:
-          "Page title shown in browser tabs and search results. Keep under 60 characters.",
+          'Shown in browser tabs and search results. Keep under 60 characters. " | Site Name" is added automatically.',
+      },
+      access: {
+        update: ({ doc }) => doc?.path !== "/",
       },
     },
     {
       name: "metaDescription",
-      label: "Meta Description",
+      label: "Description",
       type: "textarea",
       admin: {
         description:
-          "Description shown in search results. Keep between 120–160 characters.",
+          "Shown below the title in search results. Aim for 120–160 characters.",
+      },
+      access: {
+        update: ({ doc }) => doc?.path !== "/",
+      },
+    },
+    // Search preview
+    {
+      type: "ui",
+      name: "searchPreview",
+      label: " ",
+      admin: {
+        components: {
+          Field: "@/components/payload/search-preview#SearchPreview",
+        },
       },
     },
     {
+      name: "sortOrder",
+      type: "number",
+      admin: { hidden: true },
+    },
+    // OG image — read-only on homepage (inherited from Site Settings)
+    {
       name: "ogImage",
-      label: "OG Image",
+      label: "Social Sharing Image",
       type: "upload",
       relationTo: "media",
       admin: {
         description:
-          "Social sharing image for this page. Falls back to the default in Site Settings.",
+          "Image shown when this page is shared on social media. Recommended: 1200×630px.",
+      },
+      access: {
+        update: ({ doc }) => doc?.path !== "/",
       },
     },
   ],

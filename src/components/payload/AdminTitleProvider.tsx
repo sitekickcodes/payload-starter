@@ -12,7 +12,7 @@ export default function AdminTitleProvider({
   useEffect(() => {
     let suffix = "";
 
-    fetch("/api/globals/general?depth=0")
+    fetch("/api/globals/site-settings?depth=0")
       .then((res) => res.json())
       .then((data) => {
         const name = data?.contact?.businessName;

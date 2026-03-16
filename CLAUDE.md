@@ -34,7 +34,7 @@
 - `src/lib/` — shared utilities
 - `src/hooks/` — custom React hooks
 - `public/images/`, `public/icons/`, `public/videos/`, `public/fonts/`, `public/og/` — static assets
-- `create-sitekick/` — CLI scaffolding tool (published separately to npm)
+- `create-website/` — CLI scaffolding tool (published separately as @sitekickcodes/create-website)
 
 ## CMS Abstraction Layer
 

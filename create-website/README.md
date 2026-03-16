@@ -63,7 +63,7 @@ The CLI walks you through setting up everything you need:
 ```
 $ npx @sitekickcodes/create-website my-site
 
-┌  create-sitekick
+┌  create-website
 │
 ◆  What is your project name?
 │  my-site

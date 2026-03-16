@@ -1,18 +1,16 @@
+import { cache } from "react";
 import { getPayload } from "payload";
 import config from "@payload-config";
 import type {
   CMSAdapter,
   CMSImage,
-  BlogPost,
   Page,
   SiteSettings,
   AnalyticsSettings,
   SocialLinks,
 } from "./types";
 
-async function getClient() {
-  return getPayload({ config });
-}
+const getClient = cache(() => getPayload({ config }));
 
 function toImage(doc: Record<string, unknown> | undefined): CMSImage | undefined {
   if (!doc || typeof doc !== "object") return undefined;
@@ -23,57 +21,30 @@ function toImage(doc: Record<string, unknown> | undefined): CMSImage | undefined
     alt: (doc.alt as string) || undefined,
     width: (doc.width as number) || undefined,
     height: (doc.height as number) || undefined,
+    focalX: (doc.focalX as number) ?? undefined,
+    focalY: (doc.focalY as number) ?? undefined,
   };
 }
 
+const cachedGetSiteSettings = cache(async () => {
+  const payload = await getClient();
+  return payload.findGlobal({ slug: "site-settings" });
+});
+
+const cachedGetSocialLinks = cache(async (): Promise<SocialLinks> => {
+  const doc = await cachedGetSiteSettings();
+  return {
+    instagram: doc.instagram || undefined,
+    facebook: doc.facebook || undefined,
+    x: doc.x || undefined,
+    google: doc.google || undefined,
+    linkedin: doc.linkedin || undefined,
+    youtube: doc.youtube || undefined,
+    tiktok: doc.tiktok || undefined,
+  };
+});
+
 export const payloadAdapter: CMSAdapter = {
-  async getBlogPosts() {
-    const payload = await getClient();
-    const { docs } = await payload.find({
-      collection: "blog",
-      where: { status: { equals: "published" } },
-      sort: "-publishedAt",
-      depth: 1,
-    });
-
-    return docs.map((doc) => ({
-      id: String(doc.id),
-      title: doc.title,
-      slug: doc.slug,
-      content: doc.content,
-      featuredImage: toImage(doc.featuredImage as Record<string, unknown>),
-      status: doc.status as "draft" | "published",
-      publishedAt: doc.publishedAt || undefined,
-      updatedAt: doc.updatedAt,
-      createdAt: doc.createdAt,
-    }));
-  },
-
-  async getBlogPost(slug: string) {
-    const payload = await getClient();
-    const { docs } = await payload.find({
-      collection: "blog",
-      where: { slug: { equals: slug } },
-      depth: 1,
-      limit: 1,
-    });
-
-    const doc = docs[0];
-    if (!doc) return null;
-
-    return {
-      id: String(doc.id),
-      title: doc.title,
-      slug: doc.slug,
-      content: doc.content,
-      featuredImage: toImage(doc.featuredImage as Record<string, unknown>),
-      status: doc.status as "draft" | "published",
-      publishedAt: doc.publishedAt || undefined,
-      updatedAt: doc.updatedAt,
-      createdAt: doc.createdAt,
-    };
-  },
-
   async getPage(path: string) {
     const payload = await getClient();
     const { docs } = await payload.find({
@@ -96,12 +67,12 @@ export const payloadAdapter: CMSAdapter = {
   },
 
   async getSiteSettings() {
-    const payload = await getClient();
-    const doc = await payload.findGlobal({ slug: "general", depth: 1 });
+    const doc = await cachedGetSiteSettings();
 
     return {
       siteName: doc.siteName,
       siteDescription: doc.siteDescription || undefined,
+      favicon: toImage(doc.favicon as Record<string, unknown>),
       ogImage: toImage(doc.ogImage as Record<string, unknown>),
       contact: doc.contact
         ? {
@@ -120,8 +91,7 @@ export const payloadAdapter: CMSAdapter = {
   },
 
   async getAnalytics() {
-    const payload = await getClient();
-    const doc = await payload.findGlobal({ slug: "analytics" });
+    const doc = await cachedGetSiteSettings();
 
     return {
       googleAnalyticsId: doc.googleAnalyticsId || undefined,
@@ -130,17 +100,5 @@ export const payloadAdapter: CMSAdapter = {
     };
   },
 
-  async getSocialLinks() {
-    const payload = await getClient();
-    const doc = await payload.findGlobal({ slug: "social-links" });
-
-    return {
-      instagram: doc.instagram || undefined,
-      facebook: doc.facebook || undefined,
-      x: doc.x || undefined,
-      linkedin: doc.linkedin || undefined,
-      youtube: doc.youtube || undefined,
-      tiktok: doc.tiktok || undefined,
-    };
-  },
+  getSocialLinks: cachedGetSocialLinks,
 };

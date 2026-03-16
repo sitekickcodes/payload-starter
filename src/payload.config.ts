@@ -8,15 +8,12 @@ import path from "path";
 import sharp from "sharp";
 import { fileURLToPath } from "url";
 
-import { Blog } from "./collections/Blog.ts";
 import { Users } from "./collections/Users.ts";
 import { Media } from "./collections/Media.ts";
-import { FormSubmissions } from "./collections/FormSubmissions.ts";
 import { Pages } from "./collections/Pages.ts";
-import { Redirects } from "./collections/Redirects.ts";
-import { General } from "./globals/General.ts";
-import { Analytics } from "./globals/Analytics.ts";
-import { SocialLinks } from "./globals/SocialLinks.ts";
+import { ContactSubmissions } from "./collections/ContactSubmissions.ts";
+import { NewsletterSubmissions } from "./collections/NewsletterSubmissions.ts";
+import { SiteSettings } from "./globals/SiteSettings.ts";
 import { syncPages } from "./lib/syncPages.ts";
 
 const filename = fileURLToPath(import.meta.url);
@@ -37,12 +34,13 @@ export default buildConfig({
     components: {
       providers: ["@/components/payload/AdminTitleProvider.tsx"],
     },
+    theme: "dark",
   },
-  collections: [Blog, Pages, Media, Redirects, FormSubmissions, Users],
+  collections: [Pages, Media, ContactSubmissions, NewsletterSubmissions, Users],
   onInit: async (payload) => {
     await syncPages(payload);
   },
-  globals: [General, Analytics, SocialLinks],
+  globals: [SiteSettings],
   editor: lexicalEditor(),
   secret: process.env.PAYLOAD_SECRET || "",
   typescript: {
@@ -75,11 +73,10 @@ export default buildConfig({
     }),
     importExportPlugin({
       collections: [
-        { slug: "blog" },
         { slug: "users" },
         { slug: "media" },
-        { slug: "form-submissions" },
-        { slug: "redirects" },
+        { slug: "contact-submissions" },
+        { slug: "newsletter-submissions" },
       ],
     }),
   ],

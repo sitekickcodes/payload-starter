@@ -2,11 +2,10 @@
  * CMS abstraction layer.
  *
  * Frontend pages import from this file — never directly from Payload or Sanity.
- * The active adapter is determined at scaffold time by the create-sitekick CLI.
+ * The active adapter is determined at scaffold time by the create-website CLI.
  */
 
 export type {
-  BlogPost,
   Page,
   CMSImage,
   SiteSettings,

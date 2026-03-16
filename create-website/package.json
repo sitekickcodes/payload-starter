@@ -7,7 +7,7 @@
   "description": "Scaffold a new Sitekick project with your choice of CMS",
   "type": "module",
   "bin": {
-    "create-sitekick": "dist/index.js"
+    "create-website": "dist/index.js"
   },
   "scripts": {
     "build": "bun build src/index.ts --outdir dist --target node",
@@ -23,10 +23,10 @@
   ],
   "repository": {
     "type": "git",
-    "url": "https://github.com/sitekickcodes/sitekick-starter.git",
-    "directory": "create-sitekick"
+    "url": "https://github.com/sitekickcodes/website-starter.git",
+    "directory": "create-website"
   },
-  "homepage": "https://github.com/sitekickcodes/sitekick-starter#readme",
+  "homepage": "https://github.com/sitekickcodes/website-starter#readme",
   "keywords": [
     "sitekick",
     "nextjs",

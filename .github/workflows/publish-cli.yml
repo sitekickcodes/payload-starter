@@ -1,4 +1,4 @@
-name: Publish create-sitekick
+name: Publish create-website
 
 on:
   push:
@@ -14,7 +14,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: create-sitekick
+        working-directory: create-website
     steps:
       - uses: actions/checkout@v4
 

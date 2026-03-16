@@ -1,6 +1,11 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono, Instrument_Serif } from "next/font/google";
 import { GoogleAnalytics } from "@next/third-parties/google";
+import { Header } from "@/components/layout/header";
+import { Footer } from "@/components/layout/footer";
+import { Analytics } from "@vercel/analytics/next";
+import { AutoBreadcrumbJsonLd } from "@/components/auto-breadcrumb-jsonld";
+import { cms } from "@/lib/cms";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -22,22 +27,44 @@ const instrumentSerif = Instrument_Serif({
 
 const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://example.com";
 
-export const metadata: Metadata = {
-  metadataBase: new URL(siteUrl),
-  title: {
-    default: "Site Name",
-    template: "%s | Site Name",
-  },
-  description: "Site description goes here.",
-  openGraph: {
-    type: "website",
-    locale: "en_US",
-    siteName: "Site Name",
-    images: [{ url: "/og/og-default.png", width: 1200, height: 630 }],
-  },
-  twitter: {
-    card: "summary_large_image",
-  },
+export async function generateMetadata(): Promise<Metadata> {
+  const [settings, homepage] = await Promise.all([
+    cms.getSiteSettings(),
+    cms.getPage("/"),
+  ]);
+  const siteName = settings.siteName || "My Site";
+
+  return {
+    metadataBase: new URL(siteUrl),
+    title: {
+      default: siteName,
+      template: `%s | ${siteName}`,
+    },
+    description: homepage?.metaDescription || settings.siteDescription,
+    openGraph: {
+      type: "website",
+      locale: "en_US",
+      siteName,
+      images: homepage?.ogImage
+        ? [{ url: homepage.ogImage.url }]
+        : settings.ogImage
+          ? [{ url: settings.ogImage.url }]
+          : [{ url: "/og/og-default.png", width: 1200, height: 630 }],
+    },
+    twitter: {
+      card: "summary_large_image",
+    },
+    ...(settings.favicon && {
+      icons: {
+        icon: settings.favicon.url,
+      },
+    }),
+  };
+}
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
 };
 
 export default function RootLayout({
@@ -54,11 +81,15 @@ export default function RootLayout({
         <a href="#main" className="skip-to-content">
           Skip to content
         </a>
+        <Header />
+        <AutoBreadcrumbJsonLd />
         <main id="main">{children}</main>
+        <Footer />
+        <Analytics />
+        {process.env.NEXT_PUBLIC_GA_ID && (
+          <GoogleAnalytics gaId={process.env.NEXT_PUBLIC_GA_ID} />
+        )}
       </body>
-      {process.env.NEXT_PUBLIC_GA_ID && (
-        <GoogleAnalytics gaId={process.env.NEXT_PUBLIC_GA_ID} />
-      )}
     </html>
   );
 }

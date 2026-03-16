@@ -15,9 +15,12 @@ const PAYLOAD_ONLY = [
   "src/components/payload",
   "src/app/(payload)",
   "src/app/api/site-routes",
+  "src/app/api/contact",
+  "src/app/api/newsletter",
   "src/lib/syncPages.ts",
   "src/lib/getSiteRoutes.ts",
   "src/lib/generateAltText.ts",
+  "src/lib/email.ts",
   "src/lib/cms/payload.ts",
   "src/payload.config.ts",
   "src/payload-types.ts",
@@ -39,6 +42,8 @@ const PAYLOAD_DEPS = [
   "@payloadcms/richtext-lexical",
   "@payloadcms/storage-vercel-blob",
   "@payloadcms/ui",
+  "resend",
+  "@anthropic-ai/sdk",
 ];
 
 const SANITY_DEPS = [
@@ -639,9 +644,9 @@ async function pushEnvToVercel(
   s.stop(`Pushed ${pushed} env var(s) to Vercel`);
 }
 
-async function askOpenAIKey(): Promise<string | null> {
+async function askAnthropicKey(): Promise<string | null> {
   const setup = await p.select({
-    message: "OpenAI API key:",
+    message: "Anthropic API key (for AI alt text):",
     options: [
       { value: "enter", label: "Enter API key now" },
       { value: "skip", label: "Skip — set up later" },
@@ -652,11 +657,10 @@ async function askOpenAIKey(): Promise<string | null> {
   if (setup === "skip") return null;
 
   const key = await p.text({
-    message: "Paste your OpenAI API key:",
-    placeholder: "sk-...",
+    message: "Paste your Anthropic API key:",
+    placeholder: "sk-ant-...",
     validate: (v) => {
       if (!v) return "API key is required";
-      if (!v.startsWith("sk-")) return "OpenAI keys start with sk-";
     },
   });
   if (p.isCancel(key)) abort();
@@ -671,7 +675,7 @@ function configureTemplate(
   projectName: string,
 ) {
   // Remove the CLI tool directory from the scaffolded project
-  fs.rmSync(path.join(targetDir, "create-sitekick"), {
+  fs.rmSync(path.join(targetDir, "create-website"), {
     recursive: true,
     force: true,
   });
@@ -700,7 +704,6 @@ function configureTemplate(
  */
 
 export type {
-  BlogPost,
   Page,
   CMSImage,
   SiteSettings,
@@ -763,15 +766,15 @@ export default nextConfig;
 
   // Write project name into CMS defaults
   if (cms === "payload") {
-    const generalPath = path.join(targetDir, "src/globals/General.ts");
-    if (fs.existsSync(generalPath)) {
-      let content = fs.readFileSync(generalPath, "utf-8");
+    const settingsPath = path.join(targetDir, "src/globals/SiteSettings.ts");
+    if (fs.existsSync(settingsPath)) {
+      let content = fs.readFileSync(settingsPath, "utf-8");
       // Update siteName default
       content = content.replace(
         'defaultValue: "My Site"',
         `defaultValue: "${projectName}"`,
       );
-      fs.writeFileSync(generalPath, content);
+      fs.writeFileSync(settingsPath, content);
     }
   } else {
     const settingsPath = path.join(
@@ -808,7 +811,9 @@ function writeEnvFile(
       `PAYLOAD_SECRET=${envVars.PAYLOAD_SECRET || ""}`,
       `BLOB_READ_WRITE_TOKEN=${envVars.BLOB_READ_WRITE_TOKEN || ""}`,
       `RESEND_API_KEY=${envVars.RESEND_API_KEY || ""}`,
-      `OPENAI_API_KEY=${envVars.OPENAI_API_KEY || ""}`,
+      `ANTHROPIC_API_KEY=${envVars.ANTHROPIC_API_KEY || ""}`,
+      `RESEND_FROM_EMAIL=`,
+      `FORM_NOTIFICATION_EMAIL=`,
     );
   } else {
     lines.push(
@@ -816,7 +821,9 @@ function writeEnvFile(
       `NEXT_PUBLIC_SANITY_PROJECT_ID=${envVars.NEXT_PUBLIC_SANITY_PROJECT_ID || ""}`,
       `NEXT_PUBLIC_SANITY_DATASET=${envVars.NEXT_PUBLIC_SANITY_DATASET || "production"}`,
       `NEXT_PUBLIC_SANITY_API_VERSION=2024-01-01`,
-      `OPENAI_API_KEY=${envVars.OPENAI_API_KEY || ""}`,
+      `ANTHROPIC_API_KEY=${envVars.ANTHROPIC_API_KEY || ""}`,
+      `RESEND_FROM_EMAIL=`,
+      `FORM_NOTIFICATION_EMAIL=`,
     );
   }
 
@@ -843,7 +850,7 @@ function writeEnvFile(
 // ─── Main flow ───────────────────────────────────────────────────────────────
 
 async function main() {
-  p.intro(pc.bgCyan(pc.black(" create-sitekick ")));
+  p.intro(pc.bgCyan(pc.black(" create-website ")));
 
   // 1. Project name
   const projectName =
@@ -893,9 +900,9 @@ async function main() {
   await ensureBrew(s);
 
   // 4. Clone template
-  s.start("Cloning sitekick-starter...");
+  s.start("Cloning starter template...");
   execSync(
-    `git clone --depth 1 https://github.com/sitekickcodes/sitekick-starter.git ${targetDir}`,
+    `git clone --depth 1 https://github.com/sitekickcodes/website-starter.git ${targetDir}`,
     { stdio: "pipe" },
   );
   fs.rmSync(path.join(targetDir, ".git"), { recursive: true, force: true });
@@ -922,7 +929,7 @@ async function main() {
   s.start("Initializing git...");
   execSync("git init", { cwd: targetDir, stdio: "pipe" });
   execSync("git add -A", { cwd: targetDir, stdio: "pipe" });
-  execSync('git commit -m "Initial commit from create-sitekick"', {
+  execSync('git commit -m "Initial commit from create-website"', {
     cwd: targetDir,
     stdio: "pipe",
   });
@@ -967,9 +974,9 @@ async function main() {
 
   // ─── OpenAI setup ────────────────────────────────────────────────────────
 
-  p.log.step(pc.bold("OpenAI (optional)"));
-  const openaiKey = await askOpenAIKey();
-  if (openaiKey) envVars.OPENAI_API_KEY = openaiKey;
+  p.log.step(pc.bold("Anthropic (optional)"));
+  const anthropicKey = await askAnthropicKey();
+  if (anthropicKey) envVars.ANTHROPIC_API_KEY = anthropicKey;
 
   // ─── Write env files ────────────────────────────────────────────────────
 

@@ -1752,7 +1752,7 @@ async function askOpenAIKey() {
   return key;
 }
 function configureTemplate(targetDir, cms, projectName) {
-  fs.rmSync(path.join(targetDir, "create-sitekick"), {
+  fs.rmSync(path.join(targetDir, "create-website"), {
     recursive: true,
     force: true
   });
@@ -1869,7 +1869,7 @@ function writeEnvFile(targetDir, cms, envVars) {
 `);
 }
 async function main() {
-  We(import_picocolors3.default.bgCyan(import_picocolors3.default.black(" create-sitekick ")));
+  We(import_picocolors3.default.bgCyan(import_picocolors3.default.black(" create-website ")));
   const projectName = process.argv[2] || await Ze({
     message: "What is your project name?",
     placeholder: "my-site",
@@ -1906,8 +1906,8 @@ async function main() {
   }
   const s = bt2();
   await ensureBrew(s);
-  s.start("Cloning sitekick-starter...");
-  execSync(`git clone --depth 1 https://github.com/sitekickcodes/sitekick-starter.git ${targetDir}`, { stdio: "pipe" });
+  s.start("Cloning starter template...");
+  execSync(`git clone --depth 1 https://github.com/sitekickcodes/website-starter.git ${targetDir}`, { stdio: "pipe" });
   fs.rmSync(path.join(targetDir, ".git"), { recursive: true, force: true });
   scaffoldedDir = targetDir;
   s.stop("Cloned template");
@@ -1924,7 +1924,7 @@ async function main() {
   s.start("Initializing git...");
   execSync("git init", { cwd: targetDir, stdio: "pipe" });
   execSync("git add -A", { cwd: targetDir, stdio: "pipe" });
-  execSync('git commit -m "Initial commit from create-sitekick"', {
+  execSync('git commit -m "Initial commit from create-website"', {
     cwd: targetDir,
     stdio: "pipe"
   });
