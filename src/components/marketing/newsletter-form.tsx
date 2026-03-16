@@ -21,7 +21,10 @@ export function NewsletterForm({ stacked = false }: { stacked?: boolean } = {}) 
       const res = await fetch("/api/newsletter", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email }),
+        body: JSON.stringify({
+          email,
+          _hp_name: (e.target as HTMLFormElement).querySelector<HTMLInputElement>("[name=_hp_name]")?.value,
+        }),
       });
 
       const data = await res.json();
@@ -48,6 +51,9 @@ export function NewsletterForm({ stacked = false }: { stacked?: boolean } = {}) 
   if (stacked) {
     return (
       <form onSubmit={handleSubmit} className="flex w-full flex-col gap-2">
+        <div className="absolute -left-[9999px]" aria-hidden="true">
+          <input type="text" name="_hp_name" tabIndex={-1} autoComplete="off" />
+        </div>
         {status === "success" ? (
           <div
             className="flex h-10 w-full items-center justify-center gap-1.5 rounded-full bg-primary text-sm font-semibold text-primary-foreground"
@@ -87,6 +93,9 @@ export function NewsletterForm({ stacked = false }: { stacked?: boolean } = {}) 
 
   return (
     <form onSubmit={handleSubmit} className="flex w-full max-w-sm flex-col gap-3">
+      <div className="absolute -left-[9999px]" aria-hidden="true">
+        <input type="text" name="_hp_name" tabIndex={-1} autoComplete="off" />
+      </div>
       <div className="relative flex min-h-12 w-full items-stretch overflow-hidden rounded-full border border-input bg-background transition-[box-shadow] duration-300 ease-in-out focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/50 focus-within:ring-offset-2 focus-within:ring-offset-background">
         <div
           className={`flex min-w-0 overflow-hidden transition-[flex,opacity] duration-400 ease-in-out ${isExpanded ? "flex-0 opacity-0" : "flex-1"}`}

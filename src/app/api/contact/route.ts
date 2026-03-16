@@ -1,17 +1,48 @@
 import { getPayload } from "payload";
 import config from "@payload-config";
 import { sendFormNotification, contactNotificationHtml } from "@/lib/email";
+import { verifyTurnstile } from "@/lib/turnstile";
+import { rateLimit } from "@/lib/rate-limit";
 
 interface ContactBody {
   name?: string;
   email?: string;
   inquiry?: string;
   message?: string;
+  turnstileToken?: string;
+  _hp_name?: string; // honeypot
 }
 
 export async function POST(request: Request) {
   try {
-    const { name, email, inquiry, message } = (await request.json()) as ContactBody;
+    const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
+
+    // Rate limit: 5 submissions per minute per IP
+    const { limited } = rateLimit(`contact:${ip}`, 5, 60_000);
+    if (limited) {
+      return Response.json(
+        { error: "Too many submissions. Please try again in a minute." },
+        { status: 429 },
+      );
+    }
+
+    const { name, email, inquiry, message, turnstileToken, _hp_name } =
+      (await request.json()) as ContactBody;
+
+    // Honeypot check — if the hidden field has a value, it's a bot
+    if (_hp_name) {
+      // Return success to not tip off the bot
+      return Response.json({ ok: true });
+    }
+
+    // Turnstile verification
+    const turnstileOk = await verifyTurnstile(turnstileToken, ip);
+    if (!turnstileOk) {
+      return Response.json(
+        { error: "Verification failed. Please refresh and try again." },
+        { status: 403 },
+      );
+    }
 
     if (!name || name.trim().length < 2) {
       return Response.json(

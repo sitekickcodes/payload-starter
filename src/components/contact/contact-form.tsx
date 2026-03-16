@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { track } from "@vercel/analytics";
 import { Check } from "lucide-react";
 
@@ -9,6 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Button } from "@/components/ui/button";
+import { Turnstile } from "@/components/turnstile";
 
 const INQUIRY_OPTIONS = [
   { value: "general", label: "General Inquiry" },
@@ -24,17 +25,29 @@ export function ContactForm() {
   const [message, setMessage] = useState("");
   const [status, setStatus] = useState<"idle" | "submitting" | "success" | "error">("idle");
   const [errorMsg, setErrorMsg] = useState("");
+  const turnstileToken = useRef("");
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setStatus("submitting");
     setErrorMsg("");
 
+    // Read honeypot from the form
+    const form = e.target as HTMLFormElement;
+    const honeypot = (form.elements.namedItem("_hp_name") as HTMLInputElement)?.value;
+
     try {
       const res = await fetch("/api/contact", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, email, inquiry, message }),
+        body: JSON.stringify({
+          name,
+          email,
+          inquiry,
+          message,
+          turnstileToken: turnstileToken.current,
+          _hp_name: honeypot,
+        }),
       });
 
       const data = await res.json();
@@ -79,6 +92,12 @@ export function ContactForm() {
         </p>
       </div>
 
+      {/* Honeypot — hidden from humans, bots fill it in */}
+      <div className="absolute -left-[9999px]" aria-hidden="true">
+        <label htmlFor="_hp_name">Leave this empty</label>
+        <input type="text" id="_hp_name" name="_hp_name" tabIndex={-1} autoComplete="off" />
+      </div>
+
       <div className="space-y-6">
         {/* Name */}
         <div className="space-y-2">
@@ -90,7 +109,9 @@ export function ContactForm() {
             value={name}
             onChange={(e) => setName(e.target.value)}
             required
+            aria-required="true"
             minLength={2}
+            aria-describedby={errorMsg ? "form-error" : undefined}
           />
         </div>
 
@@ -104,20 +125,21 @@ export function ContactForm() {
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             required
+            aria-required="true"
           />
         </div>
 
         {/* Inquiry Type */}
         <div className="space-y-3">
           <Label>What can we help with?</Label>
-          <RadioGroup value={inquiry} onValueChange={setInquiry}>
+          <RadioGroup value={inquiry} onValueChange={setInquiry} className="w-auto gap-0">
             {INQUIRY_OPTIONS.map((option) => (
-              <div key={option.value} className="flex items-center gap-2">
+              <label key={option.value} htmlFor={option.value} className="group/radio-row -mx-2 flex w-fit cursor-pointer items-center gap-2 rounded-md px-2 py-1.5">
                 <RadioGroupItem value={option.value} id={option.value} />
-                <Label htmlFor={option.value} className="cursor-pointer font-normal">
+                <span className="body-sm font-medium leading-none">
                   {option.label}
-                </Label>
-              </div>
+                </span>
+              </label>
             ))}
           </RadioGroup>
         </div>
@@ -131,6 +153,7 @@ export function ContactForm() {
             value={message}
             onChange={(e) => setMessage(e.target.value)}
             required
+            aria-required="true"
             minLength={10}
             rows={5}
           />
@@ -138,8 +161,10 @@ export function ContactForm() {
       </div>
 
       {errorMsg && (
-        <p className="body-sm text-destructive">{errorMsg}</p>
+        <p id="form-error" role="alert" className="body-sm text-destructive">{errorMsg}</p>
       )}
+
+      <Turnstile onVerify={(token) => (turnstileToken.current = token)} />
 
       <Button
         type="submit"

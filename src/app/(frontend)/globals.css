@@ -508,6 +508,12 @@
   }
 }
 
+/* Radio button pop */
+@keyframes radio-pop {
+  from { scale: 0; }
+  to { scale: 1; }
+}
+
 /* Prefers reduced motion */
 @media (prefers-reduced-motion: reduce) {
   .scroll-reveal,

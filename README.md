@@ -222,6 +222,26 @@ src/
   payload-types.ts      # Auto-generated Payload types
 ```
 
+## Form Protection
+
+All forms include layered bot protection out of the box:
+
+| Layer | What it does | Where |
+|-------|-------------|-------|
+| **Cloudflare Turnstile** | Invisible CAPTCHA — verifies humans server-side | Contact form |
+| **Honeypot field** | Hidden field that bots fill in — silently swallowed | Contact + Newsletter |
+| **Rate limiting** | Per-IP throttling (5/min contact, 10/min newsletter) | API routes |
+
+### Setup
+
+1. Create a Turnstile widget at [dash.cloudflare.com/turnstile](https://dash.cloudflare.com/turnstile) (select **Managed** mode)
+2. Add the keys to your environment:
+   ```
+   NEXT_PUBLIC_TURNSTILE_SITE_KEY=your_site_key
+   TURNSTILE_SECRET_KEY=your_secret_key
+   ```
+3. **No keys? No problem.** Turnstile verification is skipped when the secret key is empty, so forms work normally in local dev.
+
 ## Deploying to Vercel
 
 1. Push to GitHub
