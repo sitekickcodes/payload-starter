@@ -3,7 +3,7 @@ import config from "@payload-config";
 import { generateAltText, altTextFromFilename } from "@/lib/generateAltText";
 
 const SITE_URL =
-  process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
+  process.env.NEXT_PUBLIC_SITE_URL || "https://live-from-the-divide.vercel.app";
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -40,14 +40,6 @@ export async function GET(request: Request) {
       : `${SITE_URL}${imageUrl}`;
 
     alt = await generateAltText(fullUrl, doc.filename as string);
-  }
-
-  if (alt) {
-    await payload.update({
-      collection: "media",
-      id: Number(id),
-      data: { alt },
-    });
   }
 
   return Response.json({ alt });
