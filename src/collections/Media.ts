@@ -1,5 +1,9 @@
 import type { CollectionConfig } from "payload";
-import { generateAltText, altTextFromFilename } from "../lib/generateAltText.ts";
+import { list, del } from "@vercel/blob";
+import {
+  generateAltText,
+  altTextFromFilename,
+} from "../lib/generateAltText.ts";
 
 /**
  * Sanitize a filename into a URL-friendly slug.
@@ -39,6 +43,15 @@ export const Media: CollectionConfig = {
   },
   fields: [
     {
+      name: "generateAltText",
+      type: "ui",
+      admin: {
+        components: {
+          Field: "@/components/payload/GenerateAltTextButton.tsx",
+        },
+      },
+    },
+    {
       name: "alt",
       label: "Alt Text",
       type: "text",
@@ -60,36 +73,82 @@ export const Media: CollectionConfig = {
       },
     ],
     afterChange: [
-      async ({ doc, req }) => {
+      ({ doc, operation, req }) => {
+        if (operation !== "create") return;
         if (doc.alt) return;
         if (!doc.mimeType?.startsWith("image/")) return;
-        if (!doc.url) return;
 
         const isSvg = doc.mimeType === "image/svg+xml";
 
-        let altText: string | null = null;
-
         if (isSvg) {
-          // Claude can't process SVGs — infer alt text from filename
-          altText = altTextFromFilename(doc.filename as string);
-        } else {
-          // Build a full URL that Claude's API can fetch
-          let imageUrl = doc.url as string;
-          if (!imageUrl.startsWith("http")) {
-            const base =
-              process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
-            imageUrl = `${base}${imageUrl}`;
+          const altText = altTextFromFilename(doc.filename as string);
+          if (altText) {
+            req.payload
+              .update({
+                collection: "media",
+                id: doc.id,
+                data: { alt: altText },
+              })
+              .catch(() => {});
           }
-          altText = await generateAltText(imageUrl);
+          return;
         }
 
-        if (!altText) return;
+        const thumbUrl = (doc.sizes as Record<string, any>)?.thumbnail?.url;
+        const imageUrl = thumbUrl || doc.url;
+        if (!imageUrl) return;
 
-        await req.payload.update({
-          collection: "media",
-          id: doc.id,
-          data: { alt: altText },
-        });
+        const fullUrl = (imageUrl as string).startsWith("http")
+          ? (imageUrl as string)
+          : `${process.env.NEXT_PUBLIC_SITE_URL || ""}${imageUrl}`;
+
+        generateAltText(fullUrl, doc.filename as string)
+          .then((altText) => {
+            if (altText) {
+              return req.payload.update({
+                collection: "media",
+                id: doc.id,
+                data: { alt: altText },
+              });
+            }
+          })
+          .catch(() => {});
+      },
+    ],
+    afterError: [
+      ({ req }) => {
+        if (req.method !== "POST") return;
+
+        const filename = req.file?.name;
+        if (!filename) return;
+
+        const blobPathname = `media/${filename}`;
+
+        (async () => {
+          try {
+            const result = await list({ prefix: blobPathname, limit: 100 });
+            if (result.blobs.length === 0) return;
+
+            const { docs } = await req.payload.find({
+              collection: "media",
+              limit: 1,
+              depth: 0,
+              where: { filename: { equals: filename } },
+            });
+
+            if (docs.length > 0) return;
+
+            for (const blob of result.blobs) {
+              await del(blob.url);
+            }
+
+            req.payload.logger.info(
+              `[Media] Cleaned orphan blob: ${blobPathname}`,
+            );
+          } catch {
+            // Silent
+          }
+        })();
       },
     ],
   },

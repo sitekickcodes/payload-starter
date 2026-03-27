@@ -56,7 +56,7 @@ const SUPPORTED_TYPES = new Set<string>([
   "image/webp",
 ]);
 
-export async function generateAltText(imageUrl: string): Promise<string | null> {
+export async function generateAltText(imageUrl: string, filename?: string): Promise<string | null> {
   const client = getClient();
   if (!client) return null;
 
@@ -89,9 +89,13 @@ export async function generateAltText(imageUrl: string): Promise<string | null> 
       imageSource = { type: "url", url: imageUrl };
     }
 
+    const filenameHint = filename
+      ? ` The filename is "${filename}" — use any names, places, or context from it.`
+      : "";
+
     const response = await client.messages.create({
       model: "claude-haiku-4-5-20251001",
-      max_tokens: 100,
+      max_tokens: 50,
       messages: [
         {
           role: "user",
@@ -99,7 +103,7 @@ export async function generateAltText(imageUrl: string): Promise<string | null> 
             { type: "image", source: imageSource },
             {
               type: "text",
-              text: "Write a concise alt text description for this image in one sentence. Do not start with 'Image of' or 'Photo of'. Just describe what is shown.",
+              text: `Write alt text for this image in under 12 words. Use names if known. No filler words like "image of" or "photo of".${filenameHint}`,
             },
           ],
         },
@@ -107,7 +111,12 @@ export async function generateAltText(imageUrl: string): Promise<string | null> 
     });
 
     const textBlock = response.content.find((b) => b.type === "text");
-    return textBlock && "text" in textBlock ? textBlock.text.trim() : null;
+    if (!textBlock || !("text" in textBlock)) return null;
+
+    return textBlock.text
+      .replace(/^#+\s*(alt\s*text\s*:?\s*)?/i, "")
+      .replace(/^["']|["']$/g, "")
+      .trim();
   } catch (error) {
     console.warn("[generateAltText] Failed to generate alt text:", error);
     return null;

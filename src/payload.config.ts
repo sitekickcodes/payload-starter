@@ -69,6 +69,8 @@ export default buildConfig({
         },
       },
       token: process.env.BLOB_READ_WRITE_TOKEN || "",
+      addRandomSuffix: false,
+      access: "public",
       clientUploads: true,
     }),
     importExportPlugin({

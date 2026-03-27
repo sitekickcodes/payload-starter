@@ -84,6 +84,30 @@
 - The (payload) route group files are auto-generated — do not edit them manually
 - Admin title dynamically shows the business name from the General global
 
+
+### Schema Changes (CRITICAL)
+
+When changing field names, adding/removing fields, or modifying collection/global schemas that affect the database:
+
+1. Make the schema change in the code (collection/global config)
+2. Run `bunx payload migrate:create` locally to generate a migration file in `src/migrations/`
+3. Commit the migration file alongside the schema change
+4. Payload auto-runs pending migrations on app startup via `prodMigrations` adapter option
+
+**NEVER** run manual `ALTER TABLE` or direct SQL on production. **NEVER** skip migration files. The `db.push` that runs in `bun run dev` does NOT create migrations — it only adjusts your local DB. Production requires committed migration files.
+
+Note: The `payload migrate` CLI does NOT work on Vercel builds (ESM/CJS incompatibility). Use the `prodMigrations` adapter option instead — it imports migration files directly and runs them during app initialization.
+
+### Media Uploads
+
+- `clientUploads: true` — files upload directly from browser to Vercel Blob (no size limit)
+- `addRandomSuffix: false` — required to avoid Payload CDN race condition bug (#14709)
+- `afterError` hook auto-cleans orphan blobs when an upload fails
+- `afterChange` hook auto-generates alt text via Claude (fire-and-forget, uses thumbnail)
+- `scripts/clean-orphan-blobs.mjs` — manual bulk orphan cleanup (dry run by default, `--delete` to execute)
+- `/api/cron/clean-blobs` — API endpoint for manual orphan cleanup
+- `/api/cron/backfill-alt-text` — regenerate alt text for all images (`?all=true` to overwrite existing)
+
 ## Sanity CMS
 
 - Schemas live in `src/sanity/schemas/` and are registered in `src/sanity/config.ts`
