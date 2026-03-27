@@ -46,6 +46,7 @@ export const Media: CollectionConfig = {
       name: "generateAltText",
       type: "ui",
       admin: {
+        disableListColumn: true,
         components: {
           Field: "@/components/payload/GenerateAltTextButton.tsx",
         },
