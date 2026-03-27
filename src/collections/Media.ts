@@ -42,15 +42,7 @@ export const Media: CollectionConfig = {
     read: () => true,
   },
   fields: [
-    {
-      name: "generateAltText",
-      type: "ui",
-      admin: {
-        disableListColumn: true,
-        components: {
-          Field: "@/components/payload/GenerateAltTextButton.tsx",
-        },
-      },
+          },
     },
     {
       name: "alt",
@@ -59,6 +51,16 @@ export const Media: CollectionConfig = {
       admin: {
         description:
           "A short description of the image for screen readers and SEO. Auto-generated on upload, but you can edit it. Good alt text improves accessibility and helps search engines understand your images.",
+      },
+    },
+    {
+      name: "generateAltText",
+      type: "ui",
+      admin: {
+        disableListColumn: true,
+        components: {
+          Field: "@/components/payload/GenerateAltTextButton.tsx",
+        },
       },
     },
   ],
