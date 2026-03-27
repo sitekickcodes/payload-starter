@@ -1,6 +1,6 @@
 "use client";
 
-import { useDocumentInfo, useField } from "@payloadcms/ui";
+import { useDocumentInfo, useField, Button } from "@payloadcms/ui";
 import { useCallback, useState } from "react";
 
 const GenerateAltTextButton = () => {
@@ -28,23 +28,17 @@ const GenerateAltTextButton = () => {
   if (!id) return null;
 
   return (
-    <button
-      type="button"
-      onClick={generate}
-      disabled={loading}
-      style={{
-        background: "none",
-        border: "1px solid var(--theme-elevation-400)",
-        borderRadius: 4,
-        padding: "4px 10px",
-        cursor: loading ? "wait" : "pointer",
-        fontSize: 12,
-        color: "var(--theme-elevation-800)",
-        marginBottom: 8,
-      }}
-    >
-      {loading ? "Generating..." : "Generate Alt Text"}
-    </button>
+    <div style={{ marginBottom: 8 }}>
+      <Button
+        onClick={generate}
+        disabled={loading}
+        buttonStyle="secondary"
+        size="small"
+        type="button"
+      >
+        {loading ? "Generating..." : "Generate Alt Text"}
+      </Button>
+    </div>
   );
 };
 
