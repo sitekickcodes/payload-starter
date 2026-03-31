@@ -5,6 +5,7 @@ import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
 import { Analytics } from "@vercel/analytics/next";
 import { AutoBreadcrumbJsonLd } from "@/components/auto-breadcrumb-jsonld";
+import { PostHogProvider } from "@/components/tracking/posthog-provider";
 import { cms } from "@/lib/cms";
 import "./globals.css";
 
@@ -78,13 +79,15 @@ export default function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} ${instrumentSerif.variable}`}
     >
       <body className="antialiased">
-        <a href="#main" className="skip-to-content">
-          Skip to content
-        </a>
-        <Header />
-        <AutoBreadcrumbJsonLd />
-        <main id="main">{children}</main>
-        <Footer />
+        <PostHogProvider>
+          <a href="#main" className="skip-to-content">
+            Skip to content
+          </a>
+          <Header />
+          <AutoBreadcrumbJsonLd />
+          <main id="main">{children}</main>
+          <Footer />
+        </PostHogProvider>
         <Analytics />
         {process.env.NEXT_PUBLIC_GA_ID && (
           <GoogleAnalytics gaId={process.env.NEXT_PUBLIC_GA_ID} />
