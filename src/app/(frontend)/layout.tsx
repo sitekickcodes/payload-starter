@@ -77,7 +77,7 @@ export default async function RootLayout({
     cms.getSiteSettings(),
     cms.getAnalytics(),
   ]);
-  const gaId = analytics.googleAnalyticsId || process.env.NEXT_PUBLIC_GA_ID;
+  const gaId = analytics.googleAnalyticsId;
 
   return (
     <html
