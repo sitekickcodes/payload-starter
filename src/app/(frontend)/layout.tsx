@@ -68,16 +68,27 @@ export const viewport: Viewport = {
   initialScale: 1,
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const [settings, analytics] = await Promise.all([
+    cms.getSiteSettings(),
+    cms.getAnalytics(),
+  ]);
+  const gaId = analytics.googleAnalyticsId || process.env.NEXT_PUBLIC_GA_ID;
+
   return (
     <html
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} ${instrumentSerif.variable}`}
     >
+      <head>
+        {settings.headScripts && (
+          <script dangerouslySetInnerHTML={{ __html: settings.headScripts }} />
+        )}
+      </head>
       <body className="antialiased">
         <PostHogProvider>
           <a href="#main" className="skip-to-content">
@@ -89,8 +100,11 @@ export default function RootLayout({
           <Footer />
         </PostHogProvider>
         <Analytics />
-        {process.env.NEXT_PUBLIC_GA_ID && (
-          <GoogleAnalytics gaId={process.env.NEXT_PUBLIC_GA_ID} />
+        {gaId && (
+          <GoogleAnalytics gaId={gaId} />
+        )}
+        {settings.bodyScripts && (
+          <script dangerouslySetInnerHTML={{ __html: settings.bodyScripts }} />
         )}
       </body>
     </html>
