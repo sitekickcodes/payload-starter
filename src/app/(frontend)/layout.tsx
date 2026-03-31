@@ -55,11 +55,6 @@ export async function generateMetadata(): Promise<Metadata> {
     twitter: {
       card: "summary_large_image",
     },
-    ...(settings.favicon && {
-      icons: {
-        icon: settings.favicon.url,
-      },
-    }),
   };
 }
 
