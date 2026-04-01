@@ -4,7 +4,6 @@ import { AnimateOnScroll } from "@/components/animate-on-scroll";
 import { NewsletterForm } from "@/components/marketing/newsletter-form";
 import { buildOrganizationSchema, buildWebSiteSchema } from "@/lib/structured-data";
 
-export const revalidate = 300;
 
 export default async function Home() {
   const [settings, socialLinks] = await Promise.all([

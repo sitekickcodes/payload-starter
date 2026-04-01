@@ -117,6 +117,11 @@ Note: Migration files must use \`import { sql } from 'drizzle-orm'\` (not from \
 - Environment variables: `NEXT_PUBLIC_SANITY_PROJECT_ID`, `NEXT_PUBLIC_SANITY_DATASET`, `NEXT_PUBLIC_SANITY_API_VERSION`
 - Sanity Studio is embedded at `/studio` via `src/app/studio/[[...tool]]/page.tsx`
 
+## Performance
+
+- On-demand revalidation via Payload `afterChange` hooks — no time-based ISR
+- Collections and globals use `revalidatePath()` (dynamic import from `next/cache`) to purge pages when content changes in the admin panel
+
 ## Environment Variables
 
 - Never commit secrets to git

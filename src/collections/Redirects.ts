@@ -15,6 +15,17 @@ export const Redirects: CollectionConfig = {
   access: {
     read: () => true,
   },
+  hooks: {
+    afterChange: [
+      async ({ doc }) => {
+        try {
+          const { revalidatePath } = await import("next/cache");
+          revalidatePath("/", "layout");
+        } catch {}
+        return doc;
+      },
+    ],
+  },
   fields: [
     {
       name: "from",

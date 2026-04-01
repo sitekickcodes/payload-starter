@@ -42,6 +42,15 @@ export const Pages: CollectionConfig = {
         };
       },
     ],
+    afterChange: [
+      async ({ doc }) => {
+        try {
+          const { revalidatePath } = await import("next/cache");
+          revalidatePath(doc.path || "/", "layout");
+        } catch {}
+        return doc;
+      },
+    ],
     beforeChange: [
       async ({ data, req }) => {
         // Set displayName for all pages

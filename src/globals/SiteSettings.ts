@@ -9,6 +9,16 @@ export const SiteSettings: GlobalConfig = {
   access: {
     read: () => true,
   },
+  hooks: {
+    afterChange: [
+      async () => {
+        try {
+          const { revalidatePath } = await import("next/cache");
+          revalidatePath("/", "layout");
+        } catch {}
+      },
+    ],
+  },
   fields: [
     {
       type: "tabs",
