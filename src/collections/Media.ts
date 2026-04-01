@@ -5,31 +5,6 @@ import {
   altTextFromFilename,
 } from "../lib/generateAltText.ts";
 
-/**
- * Sanitize a filename into a URL-friendly slug.
- * "imgi_66_WOOLCLOUD_BANNER.webp" → "woolcloud-banner.webp"
- * "Trust_for_Public_Land_logo_white.svg" → "trust-for-public-land-logo-white.svg"
- */
-function friendlyFilename(raw: string): string {
-  const ext = raw.includes(".") ? raw.slice(raw.lastIndexOf(".")) : "";
-  const name = raw.slice(0, raw.length - ext.length);
-
-  const clean = name
-    // Strip common prefixes like "imgi_66_", "img_123_", "IMG-20250101_" etc.
-    .replace(/^(img[a-z]?[-_]?\d+[-_])/i, "")
-    // Replace underscores, dots, and multiple hyphens with single hyphen
-    .replace(/[_.]+/g, "-")
-    // Remove non-alphanumeric chars except hyphens
-    .replace(/[^a-zA-Z0-9-]/g, "")
-    // Collapse multiple hyphens
-    .replace(/-{2,}/g, "-")
-    // Trim leading/trailing hyphens
-    .replace(/^-|-$/g, "")
-    .toLowerCase();
-
-  return `${clean}${ext.toLowerCase()}`;
-}
-
 export const Media: CollectionConfig = {
   slug: "media",
   admin: {
@@ -65,16 +40,6 @@ export const Media: CollectionConfig = {
     },
   ],
   hooks: {
-    beforeChange: [
-      ({ data, req }) => {
-        // Sanitize filename on upload
-        const file = req.file;
-        if (file?.name) {
-          file.name = friendlyFilename(file.name);
-        }
-        return data;
-      },
-    ],
     afterChange: [
       ({ doc, operation, req }) => {
         if (operation !== "create") return;
