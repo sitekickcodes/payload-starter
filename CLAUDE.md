@@ -85,18 +85,20 @@
 - Admin title dynamically shows the business name from the General global
 
 
-### Schema Changes (CRITICAL)
+### Schema Changes
 
 When changing field names, adding/removing fields, or modifying collection/global schemas that affect the database:
 
 1. Make the schema change in the code (collection/global config)
-2. Run `bunx payload migrate:create` locally to generate a migration file in `src/migrations/`
+2. Run \`bunx payload migrate:create\` to generate a migration file in \`src/migrations/\`
 3. Commit the migration file alongside the schema change
-4. Payload auto-runs pending migrations on app startup via `prodMigrations` adapter option
+4. Push — the build script runs \`payload migrate --disable-transpile && next build\` which applies pending migrations before the build starts
 
-**NEVER** run manual `ALTER TABLE` or direct SQL on production. **NEVER** skip migration files. The `db.push` that runs in `bun run dev` does NOT create migrations — it only adjusts your local DB. Production requires committed migration files.
+This is Payload's recommended workflow. The migration runs automatically on every deploy.
 
-Note: The `payload migrate` CLI does NOT work on Vercel builds (ESM/CJS incompatibility). Use the `prodMigrations` adapter option instead — it imports migration files directly and runs them during app initialization.
+**NEVER** run \`bun dev\` against the production database — it writes a \`batch = -1\` marker to \`payload_migrations\` that triggers an interactive prompt on the next build, blocking deployment. Always use a local database for development.
+
+Note: Migration files must use \`import { sql } from 'drizzle-orm'\` (not from \`@payloadcms/db-vercel-postgres\`) to avoid ESM re-export issues on Vercel.
 
 ### Media Uploads
 
