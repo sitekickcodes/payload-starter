@@ -11,10 +11,11 @@ export const SiteSettings: GlobalConfig = {
   },
   hooks: {
     afterChange: [
-      async () => {
+      async ({ req }) => {
         try {
           const { revalidatePath } = await import("next/cache");
           revalidatePath("/", "layout");
+          req.payload.logger.info("[revalidate] site settings");
         } catch {}
       },
     ],

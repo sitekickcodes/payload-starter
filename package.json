@@ -1,11 +1,11 @@
 {
-  "name": "website-starter",
+  "name": "payload-starter",
   "version": "0.1.0",
   "private": true,
   "scripts": {
     "dev": "cross-env NODE_OPTIONS=--no-deprecation next dev",
     "dev:clean": "rm -rf .next && cross-env NODE_OPTIONS=--no-deprecation next dev",
-    "build": "cross-env NODE_OPTIONS=--no-deprecation next build",
+    "build": "cross-env NODE_OPTIONS=--no-deprecation payload migrate --disable-transpile && next build",
     "start": "cross-env NODE_OPTIONS=--no-deprecation next start",
     "lint": "eslint",
     "payload": "cross-env NODE_OPTIONS=--no-deprecation payload --disable-transpile",
@@ -13,7 +13,7 @@
     "generate:importmap": "cross-env NODE_OPTIONS=--no-deprecation payload generate:importmap --disable-transpile",
     "migrate:create": "cross-env NODE_OPTIONS=--no-deprecation payload migrate:create --disable-transpile",
     "ci": "bun run build",
-    "env:pull": "vercel env pull .env.local"
+    "env:pull": "op inject -i .env.example -o .env.local"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.80.0",
@@ -30,8 +30,6 @@
     "@payloadcms/richtext-lexical": "^3.80.0",
     "@payloadcms/storage-vercel-blob": "^3.80.0",
     "@payloadcms/ui": "^3.80.0",
-    "@sanity/image-url": "^2.0.3",
-    "@sanity/vision": "^5.10.0",
     "@vercel/analytics": "^1.5.0",
     "@vercel/blob": "^2.3.1",
     "class-variance-authority": "^0.7.1",
@@ -40,13 +38,11 @@
     "graphql": "^16.12.0",
     "lucide-react": "^0.574.0",
     "next": "16.1.6",
-    "next-sanity": "^12.1.0",
     "payload": "^3.80.0",
     "posthog-js": "^1.364.4",
     "react": "19.2.4",
     "react-dom": "19.2.4",
     "resend": "^4.5.0",
-    "sanity": "^5.10.0",
     "sharp": "^0.34.5",
     "tailwind-merge": "^3.4.1"
   },

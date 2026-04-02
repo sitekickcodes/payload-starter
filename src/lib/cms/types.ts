@@ -1,8 +1,8 @@
 /**
  * Shared CMS content types.
  *
- * These interfaces define the contract between frontend pages and the CMS.
- * Each CMS adapter (payload.ts, sanity.ts) must return data matching these shapes.
+ * These interfaces define the shape of data returned to frontend pages.
+ * The Payload adapter (payload.ts) maps raw Payload docs to these types.
  */
 
 export interface CMSImage {
@@ -54,12 +54,4 @@ export interface SocialLinks {
   linkedin?: string;
   youtube?: string;
   tiktok?: string;
-}
-
-/** The CMS adapter interface that each implementation must satisfy. */
-export interface CMSAdapter {
-  getPage(path: string): Promise<Page | null>;
-  getSiteSettings(): Promise<SiteSettings>;
-  getAnalytics(): Promise<AnalyticsSettings>;
-  getSocialLinks(): Promise<SocialLinks>;
 }

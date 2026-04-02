@@ -2,7 +2,6 @@ import { cache } from "react";
 import { getPayload } from "payload";
 import config from "@payload-config";
 import type {
-  CMSAdapter,
   CMSImage,
   Page,
   SiteSettings,
@@ -12,7 +11,9 @@ import type {
 
 const getClient = cache(() => getPayload({ config }));
 
-function toImage(doc: Record<string, unknown> | undefined): CMSImage | undefined {
+function toImage(
+  doc: Record<string, unknown> | undefined,
+): CMSImage | undefined {
   if (!doc || typeof doc !== "object") return undefined;
   const url = doc.url as string | undefined;
   if (!url) return undefined;
@@ -44,8 +45,8 @@ const cachedGetSocialLinks = cache(async (): Promise<SocialLinks> => {
   };
 });
 
-export const payloadAdapter: CMSAdapter = {
-  async getPage(path: string) {
+export const cms = {
+  async getPage(path: string): Promise<Page | null> {
     const payload = await getClient();
     const { docs } = await payload.find({
       collection: "pages",
@@ -66,7 +67,7 @@ export const payloadAdapter: CMSAdapter = {
     };
   },
 
-  async getSiteSettings() {
+  async getSiteSettings(): Promise<SiteSettings> {
     const doc = await cachedGetSiteSettings();
 
     return {
@@ -90,7 +91,7 @@ export const payloadAdapter: CMSAdapter = {
     };
   },
 
-  async getAnalytics() {
+  async getAnalytics(): Promise<AnalyticsSettings> {
     const doc = await cachedGetSiteSettings();
 
     return {

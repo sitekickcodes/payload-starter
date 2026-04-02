@@ -1,15 +1,16 @@
-# Sitekick Project Rules
+# Sitekick Payload Starter — Project Rules
 
 ## Stack
 
 - Next.js 16 (App Router, React Server Components, TypeScript)
-- Payload CMS 3 (headless CMS at /admin) OR Sanity (hosted CMS at /studio)
-- Neon Postgres via @payloadcms/db-vercel-postgres (Payload only)
-- Vercel Blob for file/image storage (Payload only)
-- Sanity CDN for content and media (Sanity only)
+- Payload CMS 3 (headless CMS at /admin, dark theme)
+- Neon Postgres via @payloadcms/db-vercel-postgres
+- Vercel Blob for file/image storage
 - Tailwind CSS v4 with CSS variables
 - shadcn/ui with Base UI
 - Bun as package manager (not npm/yarn/pnpm)
+- Resend for transactional emails
+- Anthropic Claude (Haiku) for AI alt text generation
 - Deployed on Vercel
 - 1Password CLI for env var management
 
@@ -22,29 +23,29 @@
 
 ## Project Structure
 
-- `src/app/(frontend)/` — site pages and layouts (CMS-agnostic)
+- `src/app/(frontend)/` — site pages and layouts
 - `src/app/(payload)/` — Payload admin and API routes (auto-generated, do not modify)
-- `src/app/studio/` — Sanity Studio route (Sanity only)
+- `src/app/api/` — custom API routes (forms, uploads, cron jobs)
 - `src/collections/` — Payload CMS collection configs
-- `src/globals/` — Payload CMS global configs (General, Analytics, Social Links)
-- `src/sanity/` — Sanity schemas, client, queries (Sanity only)
-- `src/lib/cms/` — CMS abstraction layer (types, adapters, index)
+- `src/globals/` — Payload CMS global configs (Site Settings)
+- `src/lib/cms/` — CMS layer (types, Payload adapter, index)
+- `src/components/layout/` — site-wide layout: header, footer, nav
+- `src/components/marketing/` — newsletter forms
+- `src/components/contact/` — contact form
+- `src/components/tracking/` — analytics and tracking components
 - `src/components/payload/` — Payload admin panel customizations
-- `src/components/ui/` — shadcn/ui components
+- `src/components/ui/` — shadcn/ui primitives (do not put app-specific components here)
 - `src/lib/` — shared utilities
 - `src/hooks/` — custom React hooks
 - `public/images/`, `public/icons/`, `public/videos/`, `public/fonts/`, `public/og/` — static assets
-- `create-website/` — CLI scaffolding tool (published separately as @sitekickcodes/create-website)
 
-## CMS Abstraction Layer
+## CMS Layer
 
-- Frontend pages import from `@/lib/cms` — never directly from Payload or Sanity
-- `src/lib/cms/types.ts` defines shared interfaces: `BlogPost`, `Page`, `CMSImage`, `SiteSettings`, `AnalyticsSettings`, `SocialLinks`
-- `src/lib/cms/payload.ts` implements the adapter using Payload's local API
-- `src/lib/cms/sanity.ts` implements the adapter using GROQ queries
-- `src/lib/cms/index.ts` re-exports the active adapter (set during scaffolding)
-- The `CMSAdapter` interface in types.ts is the contract both adapters fulfill
-- When adding new content types, update types.ts first, then implement in both adapters
+- Frontend pages import from `@/lib/cms` — never directly from Payload
+- `src/lib/cms/types.ts` defines shared interfaces: `Page`, `CMSImage`, `SiteSettings`, `AnalyticsSettings`, `SocialLinks`
+- `src/lib/cms/payload.ts` implements the data-fetching functions using Payload's local API
+- `src/lib/cms/index.ts` re-exports from payload.ts
+- When adding new content types, update types.ts first, then implement in payload.ts
 
 ## Coding Conventions
 
@@ -54,25 +55,33 @@
 - Prefer server components by default; only add "use client" when needed
 - Use `@/` import alias for all project imports
 - Keep components small and composable
+- Organize components into domain folders (`layout/`, `marketing/`, `contact/`, etc.) — never place app-specific components at the top level of `src/components/`
 
 ## Styling
 
 - Use Tailwind utility classes for styling
 - Always use Tailwind's default scale for spacing, sizing, max-width, breakpoints, and all other measurements — do not use arbitrary values (`w-[347px]`) when a Tailwind token exists
-- Use the pre-built typography classes from globals.css: `.h1`-`.h6`, `.body-lg`, `.body-md`, `.body-sm`, `.text-lead`, `.text-button`, `.text-eyebrow`, `.text-caption`, `.text-overline`, `.text-quote`
+- Use the pre-built typography classes from globals.css: `.h1`-`.h6`, `.body-lg`, `.body-md`, `.body-sm`, `.type-lead`, `.type-button`, `.type-eyebrow`, `.type-caption`, `.type-overline`, `.type-quote`
 - All font sizes must be 12px (0.75rem) minimum for accessibility
 - Three font families are registered as CSS variables: `--font-display` (headings, quotes), `--font-sans` (body, UI), `--font-mono` (code) — see `globals.css` and `layout.tsx` for the actual typefaces
 - Breakpoints follow Tailwind defaults: `sm` (640px), `md` (768px), `lg` (1024px), `xl` (1280px), `2xl` (1536px) — design mobile-first
 
+## Animations
+
+- Use `AnimateOnScroll` component for scroll-triggered fade-up reveals on sections
+- Use `.stagger-item` class with `animationDelay` for staggered list items inside `AnimateOnScroll`
+- Use `.hero-text-reveal` with staggered delays for hero text entrance
+- Use `.hero-image-reveal` for hero image zoom-in
+- Mobile animations are opacity-only (no transforms) to avoid Safari jank
+- Always include `@media (prefers-reduced-motion: reduce)` fallbacks
+
 ## Figma MCP / Design Implementation
 
 - When translating Figma designs, always check for an existing component or utility class before creating anything new
-- Map Figma text styles to the typography classes in globals.css first (`.h1`-`.h6`, `.body-*`, `.text-*`)
+- Map Figma text styles to the typography classes in globals.css first (`.h1`-`.h6`, `.body-*`, `.type-*`)
 - Map Figma colors, spacing, and other tokens to existing Tailwind theme values before adding custom ones
-- If a design element matches a common UI pattern (accordion, dialog, tabs, tooltip, etc.), check if a shadcn/ui component already exists in `src/components/ui/`
-- If no local component exists but shadcn has one, install it first (`bunx shadcn@latest add <component>`), then customize — do not build from scratch
-- If no shadcn component fits, ask before creating a new component
-- Keep customizations in the component file itself; avoid one-off global styles
+- If a design element matches a common UI pattern, check shadcn/ui first
+- If no local component exists but shadcn has one, install it first, then customize — do not build from scratch
 
 ## Payload CMS
 
@@ -82,27 +91,30 @@
 - Use `payload.db.drizzle` for custom database queries outside Payload collections
 - Media uploads go to Vercel Blob automatically — do not store uploads locally
 - The (payload) route group files are auto-generated — do not edit them manually
-- Admin title dynamically shows the business name from the General global
-
+- Admin theme is locked to dark mode
+- Admin title dynamically shows the business name from the Site Settings global
+- Form submission collections (Contact, Newsletter) use custom `ui` field components for read-only card views instead of default dimmed fields
+- **Do NOT add custom `beforeChange` hooks that modify filenames** — with `clientUploads`, the file is already in Blob before hooks run, causing filename mismatches and 400 errors
 
 ### Schema Changes
 
 When changing field names, adding/removing fields, or modifying collection/global schemas that affect the database:
 
 1. Make the schema change in the code (collection/global config)
-2. Run \`bunx payload migrate:create\` to generate a migration file in \`src/migrations/\`
+2. Run `bunx payload migrate:create` to generate a migration file in `src/migrations/`
 3. Commit the migration file alongside the schema change
-4. Push — the build script runs \`payload migrate --disable-transpile && next build\` which applies pending migrations before the build starts
+4. Push — the build script runs `payload migrate --disable-transpile && next build` which applies pending migrations before the build starts
 
 This is Payload's recommended workflow. The migration runs automatically on every deploy.
 
-**NEVER** run \`bun dev\` against the production database — it writes a \`batch = -1\` marker to \`payload_migrations\` that triggers an interactive prompt on the next build, blocking deployment. Always use a local database for development.
+**NEVER** run `bun dev` against the production database — it writes a `batch = -1` marker to `payload_migrations` that triggers an interactive prompt on the next build, blocking deployment. Always use a local database for development.
 
-Note: Migration files must use \`import { sql } from 'drizzle-orm'\` (not from \`@payloadcms/db-vercel-postgres\`) to avoid ESM re-export issues on Vercel.
+Note: Migration files must use `import { sql } from 'drizzle-orm'` (not from `@payloadcms/db-vercel-postgres`) to avoid ESM re-export issues on Vercel.
 
 ### Media Uploads
 
 - `clientUploads: true` — files upload directly from browser to Vercel Blob (no size limit)
+- `disablePayloadAccessControl: true` — files served directly from Blob CDN (no proxy through Payload)
 - `addRandomSuffix: false` — required to avoid Payload CDN race condition bug (#14709)
 - `afterError` hook auto-cleans orphan blobs when an upload fails
 - `afterChange` hook auto-generates alt text via Claude (fire-and-forget, uses thumbnail)
@@ -110,27 +122,47 @@ Note: Migration files must use \`import { sql } from 'drizzle-orm'\` (not from \
 - `/api/cron/clean-blobs` — API endpoint for manual orphan cleanup
 - `/api/cron/backfill-alt-text` — regenerate alt text for all images (`?all=true` to overwrite existing)
 
-## Sanity CMS
+## Cache & Revalidation
 
-- Schemas live in `src/sanity/schemas/` and are registered in `src/sanity/config.ts`
-- Client config is in `src/sanity/client.ts`, GROQ queries in `src/sanity/queries.ts`
-- Environment variables: `NEXT_PUBLIC_SANITY_PROJECT_ID`, `NEXT_PUBLIC_SANITY_DATASET`, `NEXT_PUBLIC_SANITY_API_VERSION`
-- Sanity Studio is embedded at `/studio` via `src/app/studio/[[...tool]]/page.tsx`
+- **No time-based ISR** — pages revalidate on-demand when CMS content changes
+- Every collection and global has an `afterChange` hook that calls `revalidatePath()` for affected pages
+- **Dynamic import required**: hooks must use `await import("next/cache")` (not static `import from "next/cache"`) because the Payload CLI loads collection configs outside Next.js during migrations
+- Google Analytics ID and custom scripts are managed via CMS Site Settings (not env vars)
+
+### Adding Revalidation to New Collections
+
+```typescript
+afterChange: [
+  async ({ doc, req }) => {
+    try {
+      const { revalidatePath } = await import("next/cache");
+      revalidatePath("/");
+      revalidatePath("/your-page");
+      if (doc.slug) revalidatePath(`/your-page/${doc.slug}`);
+      req.payload.logger.info(`[revalidate] your-collection: ${doc.slug}`);
+    } catch {}
+    return doc;
+  },
+],
+```
 
 ## Performance
 
-- On-demand revalidation via Payload `afterChange` hooks — no time-based ISR
-- Collections and globals use `revalidatePath()` (dynamic import from `next/cache`) to purge pages when content changes in the admin panel
+- Critical-CH headers are scoped to `/admin` only via post-withPayload config override (prevents ~800ms Chromium first-visit penalty on public pages)
+- Hero images use `quality={60}` for smaller payloads
+- Image formats: avif + webp via next.config
+- Below-fold client components should be lazy-loaded with `next/dynamic`
 
 ## Environment Variables
 
 - Never commit secrets to git
 - All env vars are documented in `.env.example` with 1Password `op://` references
 - `NEXT_PUBLIC_` prefixed vars are exposed to the browser — only use for non-sensitive values
-- Google Analytics is disabled when `NEXT_PUBLIC_GA_ID` is empty
+- Google Analytics ID is managed in CMS Site Settings (not env vars)
 
 ## Git
 
 - Do not commit `.env.local` or any `.env` files (except `.env.example`)
 - Do not commit `node_modules/` or `.next/`
 - Use descriptive commit messages
+- Batch pushes to reduce Vercel build minutes — commit frequently, push in batches

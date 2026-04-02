@@ -1,3 +1,2 @@
 # Mark generated/vendored files so GitHub excludes them from language stats
-create-website/dist/** linguist-generated=true
 src/app/(payload)/admin/importMap.js linguist-generated=true

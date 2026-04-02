@@ -43,10 +43,11 @@ export const Pages: CollectionConfig = {
       },
     ],
     afterChange: [
-      async ({ doc }) => {
+      async ({ doc, req }) => {
         try {
           const { revalidatePath } = await import("next/cache");
           revalidatePath(doc.path || "/", "layout");
+          req.payload.logger.info(`[revalidate] page: ${doc.path}`);
         } catch {}
         return doc;
       },

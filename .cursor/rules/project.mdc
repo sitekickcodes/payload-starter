@@ -1,7 +1,0 @@
----
-description: Sitekick project conventions and stack rules
-globs:
-alwaysApply: true
----
-
-Read and follow all instructions in the CLAUDE.md file at the project root.

@@ -17,15 +17,13 @@ export const Media: CollectionConfig = {
     read: () => true,
   },
   fields: [
-          },
-    },
     {
       name: "alt",
       label: "Alt Text",
       type: "text",
       admin: {
         description:
-          "A short description of the image for screen readers and SEO. Auto-generated on upload, but you can edit it. Good alt text improves accessibility and helps search engines understand your images.",
+          "A short description of the image for screen readers and SEO. Auto-generated on upload, but you can edit it.",
       },
     },
     {
@@ -40,6 +38,42 @@ export const Media: CollectionConfig = {
     },
   ],
   hooks: {
+    afterError: [
+      ({ req }) => {
+        if (req.method !== "POST") return;
+
+        const filename = req.file?.name;
+        if (!filename) return;
+
+        const blobPathname = `media/${filename}`;
+
+        (async () => {
+          try {
+            const result = await list({ prefix: blobPathname, limit: 100 });
+            if (result.blobs.length === 0) return;
+
+            const { docs } = await req.payload.find({
+              collection: "media",
+              limit: 1,
+              depth: 0,
+              where: { filename: { equals: filename } },
+            });
+
+            if (docs.length > 0) return;
+
+            for (const blob of result.blobs) {
+              await del(blob.url);
+            }
+
+            req.payload.logger.info(
+              `[Media] Cleaned orphan blob: ${blobPathname}`,
+            );
+          } catch {
+            // Silent — cleanup is best-effort
+          }
+        })();
+      },
+    ],
     afterChange: [
       ({ doc, operation, req }) => {
         if (operation !== "create") return;
@@ -81,42 +115,6 @@ export const Media: CollectionConfig = {
             }
           })
           .catch(() => {});
-      },
-    ],
-    afterError: [
-      ({ req }) => {
-        if (req.method !== "POST") return;
-
-        const filename = req.file?.name;
-        if (!filename) return;
-
-        const blobPathname = `media/${filename}`;
-
-        (async () => {
-          try {
-            const result = await list({ prefix: blobPathname, limit: 100 });
-            if (result.blobs.length === 0) return;
-
-            const { docs } = await req.payload.find({
-              collection: "media",
-              limit: 1,
-              depth: 0,
-              where: { filename: { equals: filename } },
-            });
-
-            if (docs.length > 0) return;
-
-            for (const blob of result.blobs) {
-              await del(blob.url);
-            }
-
-            req.payload.logger.info(
-              `[Media] Cleaned orphan blob: ${blobPathname}`,
-            );
-          } catch {
-            // Silent
-          }
-        })();
       },
     ],
   },
