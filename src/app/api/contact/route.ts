@@ -1,7 +1,7 @@
 import { getPayload } from "payload";
 import config from "@payload-config";
 import { sendFormNotification, contactNotificationHtml } from "@/lib/email";
-import { verifyTurnstile } from "@/lib/turnstile";
+import { checkBotId } from "botid/server";
 import { rateLimit } from "@/lib/rate-limit";
 
 interface ContactBody {
@@ -9,7 +9,6 @@ interface ContactBody {
   email?: string;
   inquiry?: string;
   message?: string;
-  turnstileToken?: string;
   _hp_name?: string; // honeypot
 }
 
@@ -26,22 +25,22 @@ export async function POST(request: Request) {
       );
     }
 
-    const { name, email, inquiry, message, turnstileToken, _hp_name } =
+    // Bot detection
+    const botIdResult = await checkBotId();
+    if (botIdResult.isBot) {
+      return Response.json(
+        { error: "Verification failed. Please refresh and try again." },
+        { status: 403 },
+      );
+    }
+
+    const { name, email, inquiry, message, _hp_name } =
       (await request.json()) as ContactBody;
 
     // Honeypot check — if the hidden field has a value, it's a bot
     if (_hp_name) {
       // Return success to not tip off the bot
       return Response.json({ ok: true });
-    }
-
-    // Turnstile verification
-    const turnstileOk = await verifyTurnstile(turnstileToken, ip);
-    if (!turnstileOk) {
-      return Response.json(
-        { error: "Verification failed. Please refresh and try again." },
-        { status: 403 },
-      );
     }
 
     if (!name || name.trim().length < 2) {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useState } from "react";
 import { track } from "@vercel/analytics";
 import { Check } from "lucide-react";
 
@@ -9,7 +9,6 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Button } from "@/components/ui/button";
-import { Turnstile } from "@/components/turnstile";
 
 const INQUIRY_OPTIONS = [
   { value: "general", label: "General Inquiry" },
@@ -25,7 +24,6 @@ export function ContactForm() {
   const [message, setMessage] = useState("");
   const [status, setStatus] = useState<"idle" | "submitting" | "success" | "error">("idle");
   const [errorMsg, setErrorMsg] = useState("");
-  const turnstileToken = useRef("");
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -45,7 +43,6 @@ export function ContactForm() {
           email,
           inquiry,
           message,
-          turnstileToken: turnstileToken.current,
           _hp_name: honeypot,
         }),
       });
@@ -163,8 +160,6 @@ export function ContactForm() {
       {errorMsg && (
         <p id="form-error" role="alert" className="body-sm text-destructive">{errorMsg}</p>
       )}
-
-      <Turnstile onVerify={(token) => (turnstileToken.current = token)} />
 
       <Button
         type="submit"

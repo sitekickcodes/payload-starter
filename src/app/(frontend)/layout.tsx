@@ -4,6 +4,7 @@ import { GoogleAnalytics } from "@next/third-parties/google";
 import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
 import { Analytics } from "@vercel/analytics/next";
+import { BotIdClient } from "botid/client";
 import { AutoBreadcrumbJsonLd } from "@/components/auto-breadcrumb-jsonld";
 import { PostHogProvider } from "@/components/tracking/posthog-provider";
 import { cms } from "@/lib/cms";
@@ -101,6 +102,7 @@ export default async function RootLayout({
         {settings.bodyScripts && (
           <script dangerouslySetInnerHTML={{ __html: settings.bodyScripts }} />
         )}
+        <BotIdClient protect={[{ path: "/api/contact", method: "POST" }]} />
       </body>
     </html>
   );

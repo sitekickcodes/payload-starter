@@ -1,3 +1,4 @@
+import { withBotId } from "botid/next/config";
 import { withPayload } from "@payloadcms/next/withPayload";
 import type { NextConfig } from "next";
 
@@ -36,4 +37,4 @@ config.headers = async () => {
   });
 };
 
-export default config;
+export default withBotId(config);
